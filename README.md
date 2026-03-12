@@ -20,7 +20,7 @@ most.
 |-------------|------------|
 | **Frontend** | Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui |
 | **Backend**  | FastAPI, Python 3.12, SQLAlchemy 2.0, Alembic |
-| **Database** | PostgreSQL (relational) · Pinecone (vector store) |
+| **Database** | MySQL (relational) · Pinecone (vector store) |
 | **AI**       | OpenAI GPT-4o (resume analysis) · OpenAI Embeddings (semantic search) |
 
 ---
