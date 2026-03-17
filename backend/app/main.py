@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.database import engine
 from app.routers import applications, auth
@@ -24,7 +25,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://192.168.2.168:3000",
+        "http://192.168.2.168:3001",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,6 +39,16 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(applications.router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # WHY global handler: prevents raw 500 tracebacks leaking to the client;
+    # returns a consistent JSON error shape instead.
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An unexpected error occurred."},
+    )
 
 
 @app.get("/health", tags=["Health"])
