@@ -52,16 +52,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
-    # WHY global handler: prevents raw 500 tracebacks leaking to the client;
-    # returns a consistent JSON error shape instead.
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "An unexpected error occurred."},
-    )
-
-
 @app.get("/health", tags=["Health"])
 async def health_check():
     return {"status": "ok"}
