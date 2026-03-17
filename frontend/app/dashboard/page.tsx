@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getApplications, type Application } from "@/lib/api";
+import { getApplications, deleteApplication, type Application } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,6 +11,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import AddApplicationModal from "@/components/AddApplicationModal";
+import EditApplicationModal from "@/components/EditApplicationModal";
 
 // Status badge colours
 const STATUS_STYLES: Record<Application["status"], string> = {
@@ -29,7 +31,6 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // If no token exists, redirect to login immediately
     if (!localStorage.getItem("access_token")) {
       router.replace("/login");
       return;
@@ -38,7 +39,6 @@ export default function DashboardPage() {
     getApplications()
       .then(setApplications)
       .catch((err) => {
-        // 401 means the stored token has expired — force re-login
         if (err.message.includes("401") || err.message.toLowerCase().includes("unauthorized")) {
           localStorage.removeItem("access_token");
           router.replace("/login");
@@ -52,6 +52,26 @@ export default function DashboardPage() {
   function handleLogout() {
     localStorage.removeItem("access_token");
     router.push("/login");
+  }
+
+  // Optimistic UI: add the new application to the top of the list instantly
+  // without waiting for a full refetch.
+  // WHY optimistic updates: the user sees immediate feedback; feels snappy.
+  function handleCreated(app: Application) {
+    setApplications((prev) => [app, ...prev]);
+  }
+
+  // Replace the old application object with the updated one in local state.
+  function handleUpdated(updated: Application) {
+    setApplications((prev) =>
+      prev.map((a) => (a.id === updated.id ? updated : a))
+    );
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm("Delete this application?")) return;
+    await deleteApplication(id);
+    setApplications((prev) => prev.filter((a) => a.id !== id));
   }
 
   return (
@@ -69,31 +89,26 @@ export default function DashboardPage() {
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         {/* Stats row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {(["applied", "interviewing", "offer", "rejected"] as const).map(
-            (status) => (
-              <Card key={status}>
-                <CardHeader className="pb-1">
-                  <CardDescription className="capitalize">{status}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold">
-                    {applications.filter((a) => a.status === status).length}
-                  </p>
-                </CardContent>
-              </Card>
-            )
-          )}
+          {(["applied", "interviewing", "offer", "rejected"] as const).map((status) => (
+            <Card key={status}>
+              <CardHeader className="pb-1">
+                <CardDescription className="capitalize">{status}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold">
+                  {applications.filter((a) => a.status === status).length}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Application list */}
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Applications</CardTitle>
-              {/* "Add" button — wired up in Day 7 */}
-              <Button size="sm" disabled>
-                + Add application
-              </Button>
+              <CardTitle>Applications ({applications.length})</CardTitle>
+              <AddApplicationModal onCreated={handleCreated} />
             </div>
           </CardHeader>
           <CardContent>
@@ -112,20 +127,39 @@ export default function DashboardPage() {
               <ul className="divide-y">
                 {applications.map((app) => (
                   <li key={app.id} className="py-3 flex items-start justify-between gap-4">
-                    <div>
-                      <p className="font-medium">{app.company_name}</p>
-                      <p className="text-sm text-muted-foreground">{app.job_title}</p>
-                      {app.location && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {app.location} {app.is_remote && "(Remote)"}
-                        </p>
-                      )}
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{app.company_name}</p>
+                      <p className="text-sm text-muted-foreground truncate">{app.job_title}</p>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        {app.location && (
+                          <p className="text-xs text-muted-foreground">
+                            {app.location} {app.is_remote && "(Remote)"}
+                          </p>
+                        )}
+                        {(app.salary_min || app.salary_max) && (
+                          <p className="text-xs text-muted-foreground">
+                            ${app.salary_min?.toLocaleString() ?? "?"}
+                            {app.salary_max ? ` – $${app.salary_max.toLocaleString()}` : "+"}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${STATUS_STYLES[app.status]}`}
-                    >
-                      {app.status}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize whitespace-nowrap ${STATUS_STYLES[app.status]}`}
+                      >
+                        {app.status}
+                      </span>
+                      <EditApplicationModal application={app} onUpdated={handleUpdated} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                        onClick={() => handleDelete(app.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
