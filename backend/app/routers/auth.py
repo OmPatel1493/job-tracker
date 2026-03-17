@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from app.utils.security import create_access_token, hash_password, verify_password
@@ -51,3 +52,10 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 
     token = create_access_token(subject=str(user.id))
     return TokenResponse(access_token=token)
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)):
+    # WHY /me: standard pattern for "who am I?" — lets the frontend fetch
+    # the logged-in user's profile without knowing their ID upfront.
+    return current_user
