@@ -9,22 +9,49 @@ WHY pdfplumber:
 """
 
 import io
+import re
 
 import pdfplumber
 
 
-def extract_text_from_bytes(pdf_bytes: bytes) -> str:
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _clean_text(text: str) -> str:
+    """
+    Normalise extracted text:
+    - Remove null bytes / non-UTF8-safe control characters
+    - Collapse more than 2 consecutive spaces to 2
+    - Strip leading/trailing whitespace from each line
+    - Collapse more than 2 consecutive newlines to 2
+    """
+    text = text.replace("\x00", "")
+    text = re.sub(r" {3,}", "  ", text)
+    lines = [line.strip() for line in text.splitlines()]
+    text = "\n".join(lines)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+# ---------------------------------------------------------------------------
+# Public functions
+# ---------------------------------------------------------------------------
+
+def extract_text_from_pdf(file_bytes: bytes) -> str:
     """
     Extract all text from a PDF supplied as raw bytes.
 
-    Returns the full text with pages separated by newlines.
+    Cleans the extracted text (whitespace, null bytes, newlines) before
+    returning so callers always receive normalised output.
+
     Raises ValueError if the PDF contains no extractable text
     (e.g. a scanned image-only PDF).
 
     WHY bytes not file path: FastAPI uploads arrive as bytes in memory;
     avoiding a temp-file write keeps the service stateless.
     """
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
         pages_text = []
         for page in pdf.pages:
             text = page.extract_text()
@@ -33,17 +60,80 @@ def extract_text_from_bytes(pdf_bytes: bytes) -> str:
 
     if not pages_text:
         raise ValueError(
-            "No extractable text found. The PDF may be a scanned image. "
-            "OCR support is not included yet."
+            "PDF appears to be empty or unreadable"
         )
 
-    return "\n\n".join(pages_text)
+    raw = "\n\n".join(pages_text)
+    return _clean_text(raw)
 
 
-def extract_text_from_file(path: str) -> str:
+# Backward-compatible alias used by resume.py router
+extract_text_from_bytes = extract_text_from_pdf
+
+
+def extract_text_from_plain(text: str) -> str:
     """
-    Convenience wrapper for local file paths (useful in tests/scripts).
-    Reads the file and delegates to extract_text_from_bytes.
+    Accept raw plain text and apply the same cleaning rules as
+    extract_text_from_pdf.
+
+    WHY this exists: users may paste resume text directly instead of
+    uploading a PDF. The cleaning pipeline should be identical so
+    downstream AI services receive consistently formatted input.
     """
-    with open(path, "rb") as f:
-        return extract_text_from_bytes(f.read())
+    return _clean_text(text)
+
+
+def validate_resume_text(text: str) -> tuple[bool, str]:
+    """
+    Validate that extracted resume text is usable for AI processing.
+
+    Returns:
+        (False, reason)  if the text is too short to be a real resume.
+        (True,  "OK")    if the text passes all checks.
+
+    WHY validate length: a 50-character string cannot contain meaningful
+    resume content — catching this early avoids a wasted API call.
+    """
+    if len(text) < 100:
+        return False, "Resume text too short to be valid"
+    if len(text) < 300:
+        return False, "Resume text suspiciously short"
+    return True, "OK"
+
+
+def get_word_count(text: str) -> int:
+    """
+    Return the word count of the given text.
+
+    WHY useful: a quick sanity check before sending text to an AI model —
+    e.g. flag a resume with fewer than 50 words as likely incomplete.
+    """
+    return len(text.split())
+
+
+# ---------------------------------------------------------------------------
+# Inline tests
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    sample = (
+        "  Python developer with   experience in FastAPI.\n\n\n"
+        "Built REST APIs and Docker containers.  "
+    )
+
+    cleaned = extract_text_from_plain(sample)
+    assert "   " not in cleaned, "excessive spaces not removed"
+    assert "\n\n\n" not in cleaned, "excessive newlines not removed"
+    print("PASS: extract_text_from_plain cleans whitespace")
+
+    ok, msg = validate_resume_text("short")
+    assert ok is False
+    print(f"PASS: validate_resume_text rejects short text — '{msg}'")
+
+    ok, msg = validate_resume_text("x" * 400)
+    assert ok is True
+    print(f"PASS: validate_resume_text accepts valid text — '{msg}'")
+
+    count = get_word_count("hello world foo bar")
+    assert count == 4, f"expected 4, got {count}"
+    print("PASS: get_word_count returns correct count")
