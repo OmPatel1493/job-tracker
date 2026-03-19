@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.services.pdf_service import extract_text_from_bytes
+from app.services.skill_extractor import extract_skills
 
 router = APIRouter(prefix="/resume", tags=["Resume"])
 
@@ -22,6 +23,14 @@ class ParsedResumeResponse(BaseModel):
     filename: str
     char_count: int
     text: str
+
+
+class ExtractSkillsRequest(BaseModel):
+    text: str
+
+
+class ExtractSkillsResponse(BaseModel):
+    skills: dict[str, list[str]]
 
 
 @router.post("/parse", response_model=ParsedResumeResponse)
@@ -63,3 +72,28 @@ async def parse_resume(
         char_count=len(text),
         text=text,
     )
+
+
+@router.post("/extract-skills", response_model=ExtractSkillsResponse)
+async def extract_resume_skills(
+    body: ExtractSkillsRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Given plain resume text (from /resume/parse), return categorised skills
+    extracted by gpt-4o-mini.
+
+    WHY separate from /parse: the client may want to parse once and call
+    extract-skills multiple times (e.g. after editing the text), or skip
+    extraction entirely. Keeping them separate avoids re-parsing the PDF
+    on every AI call.
+    """
+    try:
+        skills = await extract_skills(body.text)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        )
+
+    return ExtractSkillsResponse(skills=skills)
