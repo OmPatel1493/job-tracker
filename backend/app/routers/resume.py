@@ -5,11 +5,19 @@ WHY separate router: resume operations are distinct from auth and job
 applications; keeps each router focused on one resource.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from typing import Optional
 
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
 from app.dependencies import get_current_user
+from app.models.resume import Resume
 from app.models.user import User
+from app.schemas.resume import ResumeUploadResponse
+from app.services import pdf_service, skill_extractor, vector_service
 from app.services.pdf_service import extract_text_from_bytes
 from app.services.skill_extractor import extract_skills
 
@@ -97,3 +105,138 @@ async def extract_resume_skills(
         )
 
     return ExtractSkillsResponse(skills=skills)
+
+
+# ---------------------------------------------------------------------------
+# POST /resume/upload — full pipeline: parse → validate → extract → embed → save
+# ---------------------------------------------------------------------------
+
+@router.post("/upload", response_model=ResumeUploadResponse, status_code=status.HTTP_200_OK)
+async def upload_resume(
+    file: Optional[UploadFile] = File(None),
+    text: Optional[str] = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Full resume upload and processing pipeline.
+
+    Accepts either a PDF file (multipart) or plain text (form field).
+    Steps:
+      1. Extract text from PDF bytes or clean plain text input.
+      2. Validate that the text is long enough to be a real resume.
+      3. Extract categorised skills via Gemini (falls back to regex).
+      4. Upsert the resume embedding into Pinecone.
+      5. Create or update the resume record in the database.
+
+    WHY upsert not insert:
+      A user has one active resume at a time. Re-uploading should silently
+      overwrite the previous version rather than creating duplicate rows.
+
+    WHY flush before Pinecone call:
+      flush() writes the new row to the DB and assigns its auto-increment id
+      without committing the transaction. This id is used as the Pinecone
+      vector_id so the two stores stay in sync. If Pinecone fails, the
+      transaction is still committed (embedding_id stays None) — the resume
+      is saved and can be re-embedded later.
+    """
+    # ------------------------------------------------------------------
+    # 1. Resolve text from file or form field
+    # ------------------------------------------------------------------
+    if file is not None:
+        filename = file.filename or ""
+        if not filename.lower().endswith(".pdf"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Only .pdf files are accepted.",
+            )
+
+        pdf_bytes = await file.read()
+        if len(pdf_bytes) > MAX_PDF_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="File exceeds the 5 MB limit.",
+            )
+
+        try:
+            resume_text = pdf_service.extract_text_from_pdf(pdf_bytes)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            )
+
+    elif text is not None:
+        resume_text = pdf_service.extract_text_from_plain(text)
+
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either a PDF file or resume text.",
+        )
+
+    # ------------------------------------------------------------------
+    # 2. Validate resume text
+    # ------------------------------------------------------------------
+    is_valid, reason = pdf_service.validate_resume_text(resume_text)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Resume validation failed: {reason}",
+        )
+
+    word_count = pdf_service.get_word_count(resume_text)
+
+    # ------------------------------------------------------------------
+    # 3. Extract skills via Gemini (with regex fallback)
+    # ------------------------------------------------------------------
+    parsed_skills = await skill_extractor.extract_skills(resume_text)
+
+    # ------------------------------------------------------------------
+    # 4. Create or update the DB record (flush to get id before Pinecone)
+    # ------------------------------------------------------------------
+    result = await db.execute(select(Resume).where(Resume.user_id == current_user.id))
+    existing = result.scalar_one_or_none()
+
+    if existing:
+        existing.raw_text = resume_text
+        existing.parsed_skills = parsed_skills
+        existing.word_count = word_count
+        resume_record = existing
+    else:
+        resume_record = Resume(
+            user_id=current_user.id,
+            raw_text=resume_text,
+            parsed_skills=parsed_skills,
+            word_count=word_count,
+        )
+        db.add(resume_record)
+
+    await db.flush()  # assigns resume_record.id without committing
+
+    # ------------------------------------------------------------------
+    # 5. Upsert embedding in Pinecone (non-fatal if unavailable)
+    # ------------------------------------------------------------------
+    try:
+        embedding_id = vector_service.upsert_resume_embedding(
+            user_id=str(current_user.id),
+            resume_id=str(resume_record.id),
+            text=resume_text,
+        )
+        resume_record.embedding_id = embedding_id
+    except RuntimeError:
+        # Vector store unavailable — save the record anyway, embed later
+        resume_record.embedding_id = None
+
+    await db.commit()
+    await db.refresh(resume_record)
+
+    return ResumeUploadResponse(
+        id=resume_record.id,
+        user_id=resume_record.user_id,
+        parsed_skills=resume_record.parsed_skills or {},
+        word_count=resume_record.word_count,
+        embedding_id=resume_record.embedding_id,
+        uploaded_at=resume_record.updated_at,
+        message="Resume uploaded and processed successfully.",
+    )
