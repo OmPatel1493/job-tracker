@@ -240,6 +240,7 @@ async def upload_resume(
         uploaded_at=resume_record.updated_at,
         message="Resume uploaded and processed successfully.",
     )
+<<<<<<< HEAD
 
 
 # ---------------------------------------------------------------------------
