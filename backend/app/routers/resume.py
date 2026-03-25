@@ -16,7 +16,12 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.resume import Resume
 from app.models.user import User
-from app.schemas.resume import ResumeResponse, ResumeUploadResponse, SkillsResponse
+from app.schemas.resume import (
+    ResumeDeleteResponse,
+    ResumeResponse,
+    ResumeUploadResponse,
+    SkillsResponse,
+)
 from app.services import pdf_service, skill_extractor, vector_service
 from app.services.pdf_service import extract_text_from_bytes
 from app.services.skill_extractor import extract_skills
@@ -231,16 +236,19 @@ async def upload_resume(
     await db.commit()
     await db.refresh(resume_record)
 
+    skills = resume_record.parsed_skills or {}
+    skill_count = sum(len(v) for v in skills.values() if isinstance(v, list))
+
     return ResumeUploadResponse(
         id=resume_record.id,
         user_id=resume_record.user_id,
-        parsed_skills=resume_record.parsed_skills or {},
+        parsed_skills=skills,
         word_count=resume_record.word_count,
+        skill_count=skill_count,
         embedding_id=resume_record.embedding_id,
         uploaded_at=resume_record.updated_at,
         message="Resume uploaded and processed successfully.",
     )
-<<<<<<< HEAD
 
 
 # ---------------------------------------------------------------------------
@@ -322,7 +330,7 @@ async def get_resume_skills(
 # DELETE /resume/ — remove resume record + Pinecone vector
 # ---------------------------------------------------------------------------
 
-@router.delete("/")
+@router.delete("/", response_model=ResumeDeleteResponse)
 async def delete_resume(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -352,4 +360,7 @@ async def delete_resume(
     await db.delete(resume)
     await db.commit()
 
-    return {"message": "Resume deleted successfully.", "deleted_id": deleted_id}
+    return ResumeDeleteResponse(
+        message="Resume deleted successfully.",
+        deleted_id=deleted_id,
+    )
