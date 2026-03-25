@@ -16,7 +16,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.resume import Resume
 from app.models.user import User
-from app.schemas.resume import ResumeUploadResponse
+from app.schemas.resume import ResumeResponse, ResumeUploadResponse, SkillsResponse
 from app.services import pdf_service, skill_extractor, vector_service
 from app.services.pdf_service import extract_text_from_bytes
 from app.services.skill_extractor import extract_skills
@@ -240,3 +240,116 @@ async def upload_resume(
         uploaded_at=resume_record.updated_at,
         message="Resume uploaded and processed successfully.",
     )
+<<<<<<< HEAD
+
+
+# ---------------------------------------------------------------------------
+# GET /resume/ — fetch current user's resume
+# ---------------------------------------------------------------------------
+
+@router.get("/", response_model=ResumeResponse)
+async def get_resume(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return the authenticated user's stored resume.
+
+    WHY word_count is recalculated here:
+      The stored word_count may be 0 on older records created before the
+      field was added. Recalculating from raw_text ensures an accurate value.
+    """
+    result = await db.execute(select(Resume).where(Resume.user_id == current_user.id))
+    resume = result.scalar_one_or_none()
+
+    if resume is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No resume uploaded yet.",
+        )
+
+    skills = resume.parsed_skills or {}
+    skill_count = sum(len(v) for v in skills.values() if isinstance(v, list))
+    word_count = resume.word_count or len((resume.raw_text or "").split())
+
+    return ResumeResponse(
+        id=resume.id,
+        user_id=resume.user_id,
+        parsed_skills=skills,
+        word_count=word_count,
+        skill_count=skill_count,
+        uploaded_at=resume.updated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /resume/skills — skills dict + flat list only
+# ---------------------------------------------------------------------------
+
+@router.get("/skills", response_model=SkillsResponse)
+async def get_resume_skills(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return only the skills from the user's resume.
+
+    WHY a dedicated endpoint:
+      Downstream features (job matching, skill-gap UI) only need the skills
+      dict — not the full raw text. Keeping this response small reduces
+      payload size and avoids sending sensitive resume text unnecessarily.
+    """
+    result = await db.execute(select(Resume).where(Resume.user_id == current_user.id))
+    resume = result.scalar_one_or_none()
+
+    if resume is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No resume uploaded yet.",
+        )
+
+    skills = resume.parsed_skills or {}
+    flat_skills = skill_extractor.flatten_skills(skills)
+
+    return SkillsResponse(
+        skills=skills,
+        flat_skills=flat_skills,
+        total_count=len(flat_skills),
+    )
+
+
+# ---------------------------------------------------------------------------
+# DELETE /resume/ — remove resume record + Pinecone vector
+# ---------------------------------------------------------------------------
+
+@router.delete("/")
+async def delete_resume(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Delete the user's resume from the database and Pinecone.
+
+    WHY vector deletion is attempted first:
+      If the DB delete succeeds but Pinecone still holds the vector, the
+      orphaned vector would pollute future similarity queries. Deleting from
+      Pinecone first (non-fatal on failure) minimises that risk.
+    """
+    result = await db.execute(select(Resume).where(Resume.user_id == current_user.id))
+    resume = result.scalar_one_or_none()
+
+    if resume is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No resume found to delete.",
+        )
+
+    deleted_id = str(resume.id)
+
+    if resume.embedding_id:
+        vector_service.delete_resume_embedding(resume.embedding_id)
+
+    await db.delete(resume)
+    await db.commit()
+
+    return {"message": "Resume deleted successfully.", "deleted_id": deleted_id}
