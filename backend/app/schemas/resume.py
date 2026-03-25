@@ -31,3 +31,24 @@ class ResumeStatusResponse(BaseModel):
     has_resume: bool
     resume_id: Optional[str]
     uploaded_at: Optional[datetime]
+
+
+class ResumeResponse(BaseModel):
+    """Full resume details returned by GET /resume/."""
+
+    id: int
+    user_id: int
+    parsed_skills: dict
+    word_count: int
+    skill_count: int
+    uploaded_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SkillsResponse(BaseModel):
+    """Skills-only payload returned by GET /resume/skills."""
+
+    skills: dict
+    flat_skills: list[str]
+    total_count: int
