@@ -27,17 +27,27 @@ IMPORTANT — Pinecone index setup (one-time manual step):
   If you use dimension=1536 (OpenAI default) the upsert will fail silently.
 """
 
+import concurrent.futures
+import logging
+
 import google.generativeai as genai
 from pinecone import Pinecone
 
 from app.config import settings
+from app.utils.exceptions import VectorServiceError
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_EMBEDDING_TIMEOUT_SECONDS = 30  # max wait for a single Gemini embed call
+
 
 # ---------------------------------------------------------------------------
 # Client initialisation
 # ---------------------------------------------------------------------------
-
-# Both clients are module-level singletons — created once when the module is
-# first imported. Lazy checks inside each function guard against missing keys.
 
 _pinecone_client: Pinecone | None = None
 _pinecone_index = None
@@ -54,16 +64,46 @@ def _get_index():
     global _pinecone_client, _pinecone_index
     if _pinecone_index is None:
         if not settings.PINECONE_API_KEY:
-            raise RuntimeError(
-                "PINECONE_API_KEY is not set. Add it to your .env file."
+            raise VectorServiceError(
+                "PINECONE_API_KEY is not set.",
+                detail="Add PINECONE_API_KEY to your .env file.",
             )
         if not settings.PINECONE_INDEX_NAME:
-            raise RuntimeError(
-                "PINECONE_INDEX_NAME is not set. Add it to your .env file."
+            raise VectorServiceError(
+                "PINECONE_INDEX_NAME is not set.",
+                detail="Add PINECONE_INDEX_NAME to your .env file.",
             )
-        _pinecone_client = Pinecone(api_key=settings.PINECONE_API_KEY)
-        _pinecone_index = _pinecone_client.Index(settings.PINECONE_INDEX_NAME)
+        try:
+            _pinecone_client = Pinecone(api_key=settings.PINECONE_API_KEY)
+            _pinecone_index = _pinecone_client.Index(settings.PINECONE_INDEX_NAME)
+        except Exception as exc:
+            raise VectorServiceError(
+                "Failed to connect to Pinecone.",
+                detail=str(exc),
+            ) from exc
     return _pinecone_index
+
+
+def _startup_connection_check() -> None:
+    """
+    Log a warning at module load time if Pinecone is not reachable.
+
+    WHY at module load: surfaces misconfiguration (missing keys, wrong
+    index name) immediately when the server starts rather than on the
+    first user request. Non-fatal — the server starts regardless.
+    """
+    if not settings.PINECONE_API_KEY or not settings.PINECONE_INDEX_NAME:
+        logger.warning(
+            "Pinecone is not configured (PINECONE_API_KEY or "
+            "PINECONE_INDEX_NAME missing). Vector features will be unavailable."
+        )
+        return
+    if not check_pinecone_connection():
+        logger.warning(
+            "Pinecone index '%s' is unreachable at startup. "
+            "Vector features will be unavailable until the connection is restored.",
+            settings.PINECONE_INDEX_NAME,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -83,31 +123,51 @@ def generate_embedding(text: str, task_type: str = "retrieval_document") -> list
         A list of 768 floats representing the text in vector space.
 
     Raises:
-        RuntimeError: if GEMINI_API_KEY is missing or the API call fails.
+        VectorServiceError: if GEMINI_API_KEY is missing, the call times out,
+                            or the API returns an error.
 
     WHY 8000 char truncation:
         text-embedding-004 has a 2048 token limit (roughly 8000 chars).
         Truncating avoids an API error for very long resumes while keeping
         the most content-rich section (the top of a resume).
+
+    WHY ThreadPoolExecutor for timeout:
+        genai.embed_content is a synchronous blocking call. asyncio.wait_for
+        cannot timeout synchronous code. Running it in a thread and calling
+        future.result(timeout=N) enforces a hard wall-clock deadline.
     """
     if not settings.GEMINI_API_KEY:
-        raise RuntimeError(
-            "GEMINI_API_KEY is not set. Add it to your .env file."
+        raise VectorServiceError(
+            "GEMINI_API_KEY is not set.",
+            detail="Add GEMINI_API_KEY to your .env file.",
         )
 
     genai.configure(api_key=settings.GEMINI_API_KEY)
+    truncated = text[:8000]
 
-    truncated = text[:8000] if len(text) > 8000 else text
-
-    try:
-        result = genai.embed_content(
+    def _call() -> dict:
+        return genai.embed_content(
             model="models/text-embedding-004",
             content=truncated,
             task_type=task_type,
         )
-        return result["embedding"]
-    except Exception as exc:
-        raise RuntimeError(f"Gemini embedding API call failed: {exc}") from exc
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_call)
+        try:
+            result = future.result(timeout=_EMBEDDING_TIMEOUT_SECONDS)
+        except concurrent.futures.TimeoutError:
+            raise VectorServiceError(
+                f"Embedding generation timed out after {_EMBEDDING_TIMEOUT_SECONDS}s.",
+                detail="The Gemini embedding API did not respond in time.",
+            )
+        except Exception as exc:
+            raise VectorServiceError(
+                "Gemini embedding API call failed.",
+                detail=str(exc),
+            ) from exc
+
+    return result["embedding"]
 
 
 # ---------------------------------------------------------------------------
@@ -126,12 +186,19 @@ def upsert_resume_embedding(user_id: str, resume_id: str, text: str) -> str:
     Returns:
         The vector_id that was upserted (use this to delete later).
 
+    Raises:
+        VectorServiceError: if embedding generation or Pinecone upsert fails.
+
     WHY composite vector_id:
         Pinecone requires globally unique IDs. Prefixing with "resume_"
         and including user_id prevents collisions between users.
     """
     vector_id = f"resume_{user_id}_{resume_id}"
-    embedding = generate_embedding(text, task_type="retrieval_document")
+
+    try:
+        embedding = generate_embedding(text, task_type="retrieval_document")
+    except VectorServiceError:
+        raise
 
     try:
         index = _get_index()
@@ -145,10 +212,13 @@ def upsert_resume_embedding(user_id: str, resume_id: str, text: str) -> str:
             },
         }])
         return vector_id
-    except RuntimeError:
+    except VectorServiceError:
         raise
     except Exception as exc:
-        raise RuntimeError(f"Pinecone upsert failed: {exc}") from exc
+        raise VectorServiceError(
+            "Pinecone upsert failed.",
+            detail=str(exc),
+        ) from exc
 
 
 def query_similar_to_jd(jd_text: str, user_id: str, top_k: int = 1) -> float:
@@ -167,12 +237,18 @@ def query_similar_to_jd(jd_text: str, user_id: str, top_k: int = 1) -> float:
         Cosine similarity score (0.0 to 1.0) of the top match.
         Returns 0.0 if no resume has been stored for this user yet.
 
+    Raises:
+        VectorServiceError: if embedding or Pinecone query fails.
+
     WHY filter by user_id:
         All users share one Pinecone index. Without a filter, a query could
         return another user's resume as the top match. Metadata filters
         ensure each user only sees their own vectors.
     """
-    embedding = generate_embedding(jd_text, task_type="retrieval_query")
+    try:
+        embedding = generate_embedding(jd_text, task_type="retrieval_query")
+    except VectorServiceError:
+        raise
 
     try:
         index = _get_index()
@@ -186,10 +262,13 @@ def query_similar_to_jd(jd_text: str, user_id: str, top_k: int = 1) -> float:
         if not matches:
             return 0.0
         return float(matches[0].get("score", 0.0))
-    except RuntimeError:
+    except VectorServiceError:
         raise
     except Exception as exc:
-        raise RuntimeError(f"Pinecone query failed: {exc}") from exc
+        raise VectorServiceError(
+            "Pinecone query failed.",
+            detail=str(exc),
+        ) from exc
 
 
 def delete_resume_embedding(vector_id: str) -> bool:
@@ -211,7 +290,8 @@ def delete_resume_embedding(vector_id: str) -> bool:
         index = _get_index()
         index.delete(ids=[vector_id])
         return True
-    except Exception:
+    except Exception as exc:
+        logger.warning("Pinecone delete failed for vector '%s': %s", vector_id, exc)
         return False
 
 
@@ -223,8 +303,8 @@ def check_pinecone_connection() -> bool:
         True if describe_index_stats() succeeds, False on any error.
 
     WHY this function:
-        Used by health check or admin endpoints to confirm the vector DB
-        is up before attempting upserts or queries.
+        Used at startup and by health check endpoints to confirm the
+        vector DB is up before attempting upserts or queries.
     """
     try:
         index = _get_index()
@@ -232,3 +312,10 @@ def check_pinecone_connection() -> bool:
         return True
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# Module-level startup check (non-fatal)
+# ---------------------------------------------------------------------------
+
+_startup_connection_check()
