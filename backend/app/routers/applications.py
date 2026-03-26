@@ -52,10 +52,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
 
-# ---------------------------------------------------------------------------
-# POST /applications/  — create
-# ---------------------------------------------------------------------------
-
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_application(
     body: ApplicationCreate,
@@ -101,14 +97,7 @@ async def create_application(
     return data
 
 
-# ---------------------------------------------------------------------------
-# POST /applications/{id}/reanalyze  — re-run pipeline
-# ---------------------------------------------------------------------------
-
-@router.post(
-    "/{application_id}/reanalyze",
-    status_code=status.HTTP_202_ACCEPTED,
-)
+@router.post("/{application_id}/reanalyze", status_code=status.HTTP_202_ACCEPTED)
 async def reanalyze_application(
     application_id: int,
     background_tasks: BackgroundTasks,
@@ -129,10 +118,7 @@ async def reanalyze_application(
     )
     application = result.scalar_one_or_none()
     if application is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Application not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found.")
 
     background_tasks.add_task(
         pipeline_service.rerun_pipeline,
@@ -141,23 +127,11 @@ async def reanalyze_application(
         current_user.id,
     )
 
-    logger.info(
-        "Reanalysis queued for application %s (user %s).",
-        application_id,
-        current_user.id,
-    )
+    logger.info("Reanalysis queued for application %s (user %s).", application_id, current_user.id)
     return {"message": "Reanalysis started", "application_id": application_id}
 
 
-# ---------------------------------------------------------------------------
-# GET /applications/stats/summary  — aggregate stats
-# NOTE: must be declared BEFORE /{application_id} (see module docstring)
-# ---------------------------------------------------------------------------
-
-@router.get(
-    "/stats/summary",
-    response_model=ApplicationStatsResponse,
-)
+@router.get("/stats/summary", response_model=ApplicationStatsResponse)
 async def get_stats_summary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -202,10 +176,6 @@ async def get_stats_summary(
         pending_analysis_count=total - analyzed_count,
     )
 
-
-# ---------------------------------------------------------------------------
-# GET /applications/  — paginated list
-# ---------------------------------------------------------------------------
 
 @router.get("", response_model=ApplicationListResponse)
 async def list_applications(
@@ -266,10 +236,6 @@ async def list_applications(
     )
 
 
-# ---------------------------------------------------------------------------
-# GET /applications/{id}  — single detail
-# ---------------------------------------------------------------------------
-
 @router.get("/{application_id}", response_model=ApplicationDetailResponse)
 async def get_application(
     application_id: int,
@@ -289,19 +255,12 @@ async def get_application(
     )
     application = result.scalar_one_or_none()
     if application is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Application not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found.")
 
     data = ApplicationDetailResponse.model_validate(application).model_dump()
     data["analysis_status"] = "pending" if application.fit_score is None else "complete"
     return data
 
-
-# ---------------------------------------------------------------------------
-# PATCH /applications/{id}/status  — update status (+ optional notes)
-# ---------------------------------------------------------------------------
 
 @router.patch("/{application_id}/status", response_model=ApplicationResponse)
 async def update_application_status(
@@ -326,10 +285,7 @@ async def update_application_status(
     )
     application = result.scalar_one_or_none()
     if application is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Application not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found.")
 
     application.status = body.status
     if body.notes is not None:
@@ -340,10 +296,6 @@ async def update_application_status(
     await db.refresh(application)
     return ApplicationResponse.model_validate(application)
 
-
-# ---------------------------------------------------------------------------
-# PATCH /applications/{id}/notes  — update notes only
-# ---------------------------------------------------------------------------
 
 @router.patch("/{application_id}/notes", response_model=ApplicationResponse)
 async def update_application_notes(
@@ -366,10 +318,7 @@ async def update_application_notes(
     )
     application = result.scalar_one_or_none()
     if application is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Application not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found.")
 
     application.notes = body.notes
     application.updated_at = datetime.now(timezone.utc)
@@ -378,10 +327,6 @@ async def update_application_notes(
     await db.refresh(application)
     return ApplicationResponse.model_validate(application)
 
-
-# ---------------------------------------------------------------------------
-# DELETE /applications/{id}
-# ---------------------------------------------------------------------------
 
 @router.delete("/{application_id}")
 async def delete_application(
@@ -404,10 +349,7 @@ async def delete_application(
     )
     application = result.scalar_one_or_none()
     if application is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Application not found.",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found.")
 
     await db.delete(application)
     await db.commit()
