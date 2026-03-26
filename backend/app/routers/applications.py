@@ -1,5 +1,5 @@
 """
-Applications router — Days 19/20/21.
+Applications router.
 
   POST   /applications                 — create + fire AI pipeline (BackgroundTask)
   POST   /applications/{id}/reanalyze  — re-run pipeline for existing application
