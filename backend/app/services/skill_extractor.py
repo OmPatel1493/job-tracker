@@ -1,5 +1,5 @@
 """
-Skill extraction service — uses Google Gemini (gemini-1.5-flash) to pull
+Skill extraction service — uses Google Gemini (gemini-2.0-flash) to pull
 structured skills out of raw resume text.
 
 WHY a service module (not inline in the router):
@@ -8,7 +8,7 @@ WHY a service module (not inline in the router):
 
 WHY Gemini instead of GPT:
   Google provides a free API tier for Gemini — no credit card required.
-  gemini-1.5-flash is fast, accurate at structured extraction tasks, and
+  gemini-2.0-flash is fast, accurate at structured extraction tasks, and
   supports response_mime_type="application/json" for reliable JSON output.
 
 WHY response_mime_type="application/json":
@@ -91,7 +91,7 @@ def _get_model() -> genai.GenerativeModel:
     if _model is None:
         genai.configure(api_key=settings.GEMINI_API_KEY)
         _model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
+            model_name="gemini-2.0-flash",
             generation_config=genai.types.GenerationConfig(
                 response_mime_type="application/json",
                 temperature=0,
@@ -156,7 +156,7 @@ Resume text:
 
 async def extract_skills_with_gemini(text: str) -> dict[str, list[str]]:
     """
-    Send resume text to gemini-1.5-flash and return a dict of categorised skills.
+    Send resume text to gemini-2.0-flash and return a dict of categorised skills.
 
     Input is sanitized and capped at MAX_INPUT_CHARS before being sent.
     Retries once if the first attempt times out.

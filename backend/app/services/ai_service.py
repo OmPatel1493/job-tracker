@@ -6,7 +6,7 @@ WHY a dedicated ai_service.py:
   text and any other AI tasks. Keeping them separate means each file has one
   responsibility and stays easy to read and test.
 
-WHY Gemini gemini-1.5-flash:
+WHY Gemini gemini-2.0-flash:
   Free tier, fast, accurate at structured JSON extraction tasks.
   No credit card required — get a key at https://aistudio.google.com/apikey
 """
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-2.0-flash"
 MAX_JD_LENGTH = 15_000  # chars — more than any real job description needs
 
 
