@@ -1,7 +1,7 @@
 import enum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import Date, Enum, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -13,12 +13,13 @@ if TYPE_CHECKING:
 
 
 class ApplicationStatus(str, enum.Enum):
+    SAVED = "saved"
     APPLIED = "applied"
     PHONE_SCREEN = "phone_screen"
     INTERVIEW = "interview"
     OFFER = "offer"
     REJECTED = "rejected"
-    WITHDRAWN = "withdrawn"
+    WITHDRAWN = "withdrawn"  # kept for backwards compatibility with existing data
 
 
 class JobApplication(TimestampMixin, Base):
@@ -30,27 +31,34 @@ class JobApplication(TimestampMixin, Base):
     )
 
     # Core job info
-    company_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    job_title: Mapped[str] = mapped_column(String(200), nullable=False)
-    job_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    company_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    job_title: Mapped[str] = mapped_column(String(255), nullable=False)
+    job_description: Mapped[str] = mapped_column(Text, nullable=False)
     job_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    location: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    is_remote: Mapped[bool] = mapped_column(default=False, nullable=False)
 
     # Status tracking
     status: Mapped[ApplicationStatus] = mapped_column(
         Enum(ApplicationStatus),
-        default=ApplicationStatus.APPLIED,
+        default=ApplicationStatus.SAVED,
         nullable=False,
     )
-    application_date: Mapped[str | None] = mapped_column(Date, nullable=True)
+    applied_date: Mapped[str | None] = mapped_column(Date, nullable=True)
 
-    # Compensation
-    salary_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    salary_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Free-text notes (inline, not a separate table)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # AI matching results (null until matching has been run)
+    jd_skills: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    fit_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fit_score_pct: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fit_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    semantic_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    skill_overlap_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    matched_skills: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    missing_skills: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="applications")
-    notes: Mapped[list["Note"]] = relationship(
+    note_entries: Mapped[list["Note"]] = relationship(
         "Note", back_populates="application", cascade="all, delete-orphan"
     )
