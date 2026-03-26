@@ -66,10 +66,9 @@ async def create_application(
     """
     Save a new job application and trigger AI matching in the background.
 
-    Step 1 — persist the row immediately. All AI fields are left as None
-    until the pipeline fills them in.
-    Step 2 — enqueue the AI pipeline as a BackgroundTask so the caller
-    gets an instant HTTP 201 without waiting for Gemini / Pinecone.
+    Persists the row immediately with AI fields as None, then enqueues
+    the pipeline as a BackgroundTask so the caller gets an instant 201
+    without waiting for Gemini / Pinecone.
     """
     application = JobApplication(
         user_id=current_user.id,

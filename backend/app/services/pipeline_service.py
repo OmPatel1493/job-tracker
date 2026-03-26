@@ -2,9 +2,9 @@
 Pipeline service — master orchestrator for the AI matching pipeline.
 
 WHY a dedicated pipeline_service.py:
-  The AI pipeline involves 5+ steps across 4 different services. Putting this
-  logic in a router would make it untestable and hard to follow. A dedicated
-  orchestrator keeps each step isolated, easy to log, and safe to re-run.
+  The AI pipeline involves multiple stages across 4 different services. Putting
+  this logic in a router would make it untestable and hard to follow. A dedicated
+  orchestrator keeps each stage isolated, easy to log, and safe to re-run.
 
 WHY run AFTER the application is saved:
   The application row must exist in the DB before we can update it with AI
@@ -13,10 +13,10 @@ WHY run AFTER the application is saved:
   application — the row always exists, AI fields just stay null until
   the pipeline completes.
 
-WHY per-step try/except:
-  Each step calls an external service (Gemini, Pinecone, MySQL). Any one of
-  them can fail independently. Catching per-step lets us log exactly which
-  step failed and return a useful error, rather than a generic 500.
+WHY per-stage try/except:
+  Each stage calls an external service (Gemini, Pinecone, MySQL). Any one of
+  them can fail independently. Catching per-stage lets us log exactly which
+  stage failed and return a useful error, rather than a generic 500.
 """
 
 import logging
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Main pipeline
+# Public interface
 # ---------------------------------------------------------------------------
 
 async def run_application_pipeline(
@@ -47,14 +47,6 @@ async def run_application_pipeline(
     Enriches the application with JD skill extraction, semantic similarity,
     and skill gap analysis, then writes the results back to the DB.
 
-    Steps:
-        1. Load application + resume from DB
-        2. Extract skills from job description (Gemini)
-        3. Flatten JD skills and resume skills into lists
-        4. Run full matching (semantic + skill overlap)
-        5. Write results back to the application row
-        6. Return success/failure dict
-
     Args:
         db:              Async DB session (injected by FastAPI).
         application_id:  ID of the application to enrich.
@@ -62,7 +54,7 @@ async def run_application_pipeline(
 
     Returns:
         {"success": True, "result": {...}}  on success
-        {"success": False, "error": "...", "failed_step": "..."}  on failure
+        {"success": False, "error": "...", "failed_stage": "..."}  on failure
     """
     return await _run_pipeline(db, application_id, user_id, is_rerun=False)
 
@@ -114,9 +106,7 @@ async def _run_pipeline(
         run_label, application_id, user_id,
     )
 
-    # ------------------------------------------------------------------
-    # Step 1 — Load application and resume from DB
-    # ------------------------------------------------------------------
+    # Load application and resume from DB
     try:
         app_result = await db.execute(
             select(JobApplication).where(
@@ -127,11 +117,11 @@ async def _run_pipeline(
         application = app_result.scalar_one_or_none()
 
         if application is None:
-            logger.error("Pipeline step 1 failed: application %s not found.", application_id)
+            logger.error("Pipeline load failed: application %s not found.", application_id)
             return {
                 "success": False,
                 "error": f"Application {application_id} not found.",
-                "failed_step": "step_1_load_data",
+                "failed_stage": "load_data",
             }
 
         resume_result = await db.execute(
@@ -141,7 +131,7 @@ async def _run_pipeline(
 
         if resume is None:
             logger.warning(
-                "Pipeline step 1: no resume for user %s — writing error note to application.",
+                "Pipeline: no resume for user %s — writing note to application.",
                 user_id,
             )
             application.notes = (
@@ -152,39 +142,31 @@ async def _run_pipeline(
             return {"success": False, "error": "No resume found"}
 
     except Exception as exc:
-        logger.exception("Pipeline step 1 failed: %s", exc)
-        return {"success": False, "error": str(exc), "failed_step": "step_1_load_data"}
+        logger.exception("Pipeline load failed: %s", exc)
+        return {"success": False, "error": str(exc), "failed_stage": "load_data"}
 
-    # ------------------------------------------------------------------
-    # Step 2 — Extract JD skills via Gemini
-    # ------------------------------------------------------------------
+    # Extract JD skills via Gemini
     try:
         jd_skills_dict = ai_service.extract_jd_skills(application.job_description)
-        logger.info("Pipeline step 2 complete: JD skills extracted.")
+        logger.info("Pipeline: JD skills extracted.")
     except Exception as exc:
-        logger.exception("Pipeline step 2 failed (JD skill extraction): %s", exc)
-        return {"success": False, "error": str(exc), "failed_step": "step_2_extract_jd_skills"}
+        logger.exception("Pipeline: JD skill extraction failed: %s", exc)
+        return {"success": False, "error": str(exc), "failed_stage": "extract_jd_skills"}
 
-    # ------------------------------------------------------------------
-    # Step 3 — Flatten skill lists
-    # ------------------------------------------------------------------
+    # Flatten skill lists
     try:
         flat_jd_skills = ai_service.flatten_jd_skills(jd_skills_dict)
-
         raw_resume_skills = resume.parsed_skills or {}
         flat_resume_skills = skill_extractor.flatten_skills(raw_resume_skills)
-
         logger.info(
-            "Pipeline step 3 complete: %d JD skills, %d resume skills.",
+            "Pipeline: %d JD skills, %d resume skills.",
             len(flat_jd_skills), len(flat_resume_skills),
         )
     except Exception as exc:
-        logger.exception("Pipeline step 3 failed (flatten skills): %s", exc)
-        return {"success": False, "error": str(exc), "failed_step": "step_3_flatten_skills"}
+        logger.exception("Pipeline: flatten skills failed: %s", exc)
+        return {"success": False, "error": str(exc), "failed_stage": "flatten_skills"}
 
-    # ------------------------------------------------------------------
-    # Step 4 — Run full matching (semantic + skill overlap)
-    # ------------------------------------------------------------------
+    # Run full matching (semantic + skill overlap)
     try:
         matching_result = matching_service.run_full_matching(
             jd_text=application.job_description,
@@ -193,17 +175,15 @@ async def _run_pipeline(
             user_id=str(user_id),
         )
         logger.info(
-            "Pipeline step 4 complete: fit_score=%.4f (%s).",
+            "Pipeline: fit_score=%.4f (%s).",
             matching_result["fit_score"],
             matching_result["fit_label"],
         )
     except Exception as exc:
-        logger.exception("Pipeline step 4 failed (matching): %s", exc)
-        return {"success": False, "error": str(exc), "failed_step": "step_4_run_matching"}
+        logger.exception("Pipeline: matching failed: %s", exc)
+        return {"success": False, "error": str(exc), "failed_stage": "run_matching"}
 
-    # ------------------------------------------------------------------
-    # Step 5 — Write results back to DB
-    # ------------------------------------------------------------------
+    # Write results back to DB
     try:
         application.jd_skills = jd_skills_dict
         application.fit_score = matching_result["fit_score"]
@@ -216,15 +196,12 @@ async def _run_pipeline(
 
         await db.commit()
         await db.refresh(application)
-        logger.info("Pipeline step 5 complete: application %s updated in DB.", application_id)
+        logger.info("Pipeline: application %s updated in DB.", application_id)
 
     except Exception as exc:
-        logger.exception("Pipeline step 5 failed (DB write): %s", exc)
+        logger.exception("Pipeline: DB write failed: %s", exc)
         await db.rollback()
-        return {"success": False, "error": str(exc), "failed_step": "step_5_db_write"}
+        return {"success": False, "error": str(exc), "failed_stage": "db_write"}
 
-    # ------------------------------------------------------------------
-    # Step 6 — Return result
-    # ------------------------------------------------------------------
     logger.info("Pipeline %s complete — application_id=%s", run_label, application_id)
     return {"success": True, "result": matching_result}
