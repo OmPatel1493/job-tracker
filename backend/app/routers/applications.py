@@ -1,13 +1,14 @@
 """
-<<<<<<< HEAD
-Applications router — Day 19/20: POST create/reanalyze + GET list/detail/stats.
-=======
-Applications router — Day 19: POST create + POST reanalyze only.
+Applications router — Days 19/20/21.
 
-WHY only POST today:
-    GET / PATCH / DELETE come on Day 20 once we confirm the create
-    flow (background pipeline, new schema) works end-to-end first.
->>>>>>> 097e5a7288834aa6b14e003cc49ab6177a6ca0d9
+  POST   /applications                 — create + fire AI pipeline (BackgroundTask)
+  POST   /applications/{id}/reanalyze  — re-run pipeline for existing application
+  GET    /applications/stats/summary   — aggregate stats
+  GET    /applications                 — paginated list (filter / search / sort)
+  GET    /applications/{id}            — full detail + analysis_status
+  PATCH  /applications/{id}/status     — update status (+ optional notes)
+  PATCH  /applications/{id}/notes      — update notes only
+  DELETE /applications/{id}            — delete application
 
 WHY BackgroundTasks for the pipeline:
     AI analysis (Gemini + Pinecone) can take 2-5 s. Blocking the HTTP
@@ -15,7 +16,6 @@ WHY BackgroundTasks for the pipeline:
     we commit the application row, return 201 immediately, and let the
     pipeline enrich it in the background. The AI fields start as None
     and are filled in once the background task completes.
-<<<<<<< HEAD
 
 WHY /stats/summary is defined before /{application_id}:
     FastAPI matches routes in declaration order. If /{application_id}
@@ -25,35 +25,26 @@ WHY /stats/summary is defined before /{application_id}:
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy import asc, desc, func, or_, select
-=======
-"""
-
-import logging
-
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy import select
->>>>>>> 097e5a7288834aa6b14e003cc49ab6177a6ca0d9
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.job_application import JobApplication
 from app.models.user import User
-<<<<<<< HEAD
 from app.schemas.application import (
     ApplicationCreate,
     ApplicationDetailResponse,
     ApplicationListResponse,
+    ApplicationNotesUpdate,
     ApplicationResponse,
     ApplicationStatsResponse,
+    ApplicationStatusUpdate,
 )
-=======
-from app.schemas.application import ApplicationCreate, ApplicationResponse
->>>>>>> 097e5a7288834aa6b14e003cc49ab6177a6ca0d9
 from app.services import pipeline_service
 
 logger = logging.getLogger(__name__)
@@ -74,16 +65,11 @@ async def create_application(
 ):
     """
     Save a new job application and trigger AI matching in the background.
-<<<<<<< HEAD
 
-    Step 1 — persist the row immediately.  All AI fields (fit_score,
-    matched_skills, etc.) are left as None until the pipeline fills them in.
-
+    Step 1 — persist the row immediately. All AI fields are left as None
+    until the pipeline fills them in.
     Step 2 — enqueue the AI pipeline as a BackgroundTask so the caller
     gets an instant HTTP 201 without waiting for Gemini / Pinecone.
-
-    Returns ApplicationResponse fields plus a 'message' key confirming
-    that analysis has been queued.
     """
     application = JobApplication(
         user_id=current_user.id,
@@ -104,37 +90,6 @@ async def create_application(
         application.id,
         current_user.id,
     )
-=======
-
-    Step 1 — persist the row immediately.  All AI fields (fit_score,
-    matched_skills, etc.) are left as None until the pipeline fills them in.
-
-    Step 2 — enqueue the AI pipeline as a BackgroundTask so the caller
-    gets an instant HTTP 201 without waiting for Gemini / Pinecone.
-
-    Returns ApplicationResponse fields plus a 'message' key confirming
-    that analysis has been queued.
-    """
-    application = JobApplication(
-        user_id=current_user.id,
-        company_name=body.company_name,
-        job_title=body.job_title,
-        job_description=body.job_description,
-        notes=body.notes,
-        applied_date=body.applied_date,
-        job_url=body.job_url,
-    )
-    db.add(application)
-    await db.commit()
-    await db.refresh(application)
-
-    background_tasks.add_task(
-        pipeline_service.run_application_pipeline,
-        db,
-        application.id,
-        current_user.id,
-    )
->>>>>>> 097e5a7288834aa6b14e003cc49ab6177a6ca0d9
 
     logger.info(
         "Application %s created for user %s — AI pipeline queued.",
@@ -156,7 +111,6 @@ async def create_application(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def reanalyze_application(
-<<<<<<< HEAD
     application_id: int,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
@@ -167,9 +121,6 @@ async def reanalyze_application(
 
     Useful after the user uploads a new resume and wants refreshed fit
     scores without creating a duplicate application row.
-
-    Returns 404 if the application does not exist or belongs to a
-    different user.
     """
     result = await db.execute(
         select(JobApplication).where(
@@ -215,17 +166,14 @@ async def get_stats_summary(
     """
     Return aggregate statistics for the current user's applications.
 
-    All aggregation is done in a single DB round-trip per query using
-    SQLAlchemy func — no Python loops over result sets.
+    All aggregation is done via SQLAlchemy func — no Python loops.
     """
     user_filter = JobApplication.user_id == current_user.id
 
-    # Total count
     total: int = await db.scalar(
         select(func.count()).select_from(JobApplication).where(user_filter)
     ) or 0
 
-    # Count per status
     status_rows = await db.execute(
         select(JobApplication.status, func.count().label("n"))
         .where(user_filter)
@@ -233,7 +181,6 @@ async def get_stats_summary(
     )
     by_status: dict[str, int] = {row.status: row.n for row in status_rows}
 
-    # Fit-score aggregates (only over rows that have been analyzed)
     agg_row = await db.execute(
         select(
             func.avg(JobApplication.fit_score).label("avg_fit"),
@@ -244,7 +191,6 @@ async def get_stats_summary(
     agg = agg_row.one()
 
     analyzed_count: int = agg.analyzed or 0
-    pending_count: int = total - analyzed_count
     avg_fit = round(float(agg.avg_fit), 4) if agg.avg_fit is not None else None
     highest_fit = round(float(agg.max_fit), 4) if agg.max_fit is not None else None
 
@@ -254,7 +200,7 @@ async def get_stats_summary(
         avg_fit_score=avg_fit,
         highest_fit_score=highest_fit,
         analyzed_count=analyzed_count,
-        pending_analysis_count=pending_count,
+        pending_analysis_count=total - analyzed_count,
     )
 
 
@@ -277,20 +223,9 @@ async def list_applications(
     """
     Return a paginated, filterable list of the user's applications.
 
-    Query params:
-        status      — filter by exact status value
-        search      — case-insensitive substring match on company_name or job_title
-        sort_by     — "created_at" (default) or "fit_score_pct"
-        order       — "desc" (default) or "asc"
-        limit       — page size, 1–100 (default 20)
-        offset      — number of rows to skip (default 0)
-
-    Sets X-Total-Count response header to the unfiltered+filtered row count
-    so the frontend can build pagination controls without a second request.
+    Sets X-Total-Count response header for pagination controls.
     """
-    base_filter = JobApplication.user_id == current_user.id
-
-    filters = [base_filter]
+    filters = [JobApplication.user_id == current_user.id]
     if status_filter:
         filters.append(JobApplication.status == status_filter)
     if search:
@@ -302,12 +237,10 @@ async def list_applications(
             )
         )
 
-    # Total matching rows (for X-Total-Count header)
     total: int = await db.scalar(
         select(func.count()).select_from(JobApplication).where(*filters)
     ) or 0
 
-    # Sort column + direction
     sort_col = (
         JobApplication.fit_score_pct
         if sort_by == "fit_score_pct"
@@ -340,28 +273,14 @@ async def list_applications(
 
 @router.get("/{application_id}", response_model=ApplicationDetailResponse)
 async def get_application(
-=======
->>>>>>> 097e5a7288834aa6b14e003cc49ab6177a6ca0d9
     application_id: int,
-    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
-<<<<<<< HEAD
-    Return full detail for a single application, including all AI fields.
+    Return full detail for a single application including all AI fields.
 
-    Sets 'analysis_status' to "pending" when the pipeline hasn't run yet
-    (fit_score is None) and "complete" once it has.
-=======
-    Re-trigger the AI matching pipeline for an existing application.
-
-    Useful after the user uploads a new resume and wants refreshed fit
-    scores without creating a duplicate application row.
-
-    Returns 404 if the application does not exist or belongs to a
-    different user.
->>>>>>> 097e5a7288834aa6b14e003cc49ab6177a6ca0d9
+    Sets analysis_status to "pending" when fit_score is None, "complete" otherwise.
     """
     result = await db.execute(
         select(JobApplication).where(
@@ -375,24 +294,124 @@ async def get_application(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Application not found.",
         )
-<<<<<<< HEAD
 
     data = ApplicationDetailResponse.model_validate(application).model_dump()
     data["analysis_status"] = "pending" if application.fit_score is None else "complete"
     return data
-=======
 
-    background_tasks.add_task(
-        pipeline_service.rerun_pipeline,
-        db,
-        application_id,
-        current_user.id,
-    )
 
-    logger.info(
-        "Reanalysis queued for application %s (user %s).",
-        application_id,
-        current_user.id,
+# ---------------------------------------------------------------------------
+# PATCH /applications/{id}/status  — update status (+ optional notes)
+# ---------------------------------------------------------------------------
+
+@router.patch("/{application_id}/status", response_model=ApplicationResponse)
+async def update_application_status(
+    application_id: int,
+    body: ApplicationStatusUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update the status of an application, and optionally its notes.
+
+    WHY a dedicated /status endpoint (not a generic PATCH):
+        Keeping status updates explicit prevents accidental overwrites of
+        AI fields. A generic PATCH with exclude_unset could still clobber
+        fields if the client sends unexpected keys.
+    """
+    result = await db.execute(
+        select(JobApplication).where(
+            JobApplication.id == application_id,
+            JobApplication.user_id == current_user.id,
+        )
     )
-    return {"message": "Reanalysis started", "application_id": application_id}
->>>>>>> 097e5a7288834aa6b14e003cc49ab6177a6ca0d9
+    application = result.scalar_one_or_none()
+    if application is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    application.status = body.status
+    if body.notes is not None:
+        application.notes = body.notes
+    application.updated_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    await db.refresh(application)
+    return ApplicationResponse.model_validate(application)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /applications/{id}/notes  — update notes only
+# ---------------------------------------------------------------------------
+
+@router.patch("/{application_id}/notes", response_model=ApplicationResponse)
+async def update_application_notes(
+    application_id: int,
+    body: ApplicationNotesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Replace the free-text notes on an application.
+
+    Separate from /status so the frontend can autosave notes without
+    accidentally touching the status field.
+    """
+    result = await db.execute(
+        select(JobApplication).where(
+            JobApplication.id == application_id,
+            JobApplication.user_id == current_user.id,
+        )
+    )
+    application = result.scalar_one_or_none()
+    if application is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    application.notes = body.notes
+    application.updated_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    await db.refresh(application)
+    return ApplicationResponse.model_validate(application)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /applications/{id}
+# ---------------------------------------------------------------------------
+
+@router.delete("/{application_id}")
+async def delete_application(
+    application_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Permanently delete an application row.
+
+    WHY return a body (not 204 No Content):
+        A JSON confirmation with the deleted ID lets the frontend update
+        local state by ID without needing to parse a 204 response.
+    """
+    result = await db.execute(
+        select(JobApplication).where(
+            JobApplication.id == application_id,
+            JobApplication.user_id == current_user.id,
+        )
+    )
+    application = result.scalar_one_or_none()
+    if application is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    await db.delete(application)
+    await db.commit()
+
+    logger.info("Application %s deleted by user %s.", application_id, current_user.id)
+    return {"message": "Application deleted", "deleted_id": str(application_id)}
