@@ -18,10 +18,10 @@ most.
 
 | Layer       | Technology |
 |-------------|------------|
-| **Frontend** | Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui |
-| **Backend**  | FastAPI, Python 3.12, SQLAlchemy 2.0, Alembic |
+| **Frontend** | Next.js 15, React 18, TypeScript 5, Tailwind CSS, shadcn/ui |
+| **Backend**  | FastAPI 0.115, Python 3.12, SQLAlchemy 2.0, Alembic 1.14 |
 | **Database** | MySQL (relational) · Pinecone (vector store) |
-| **AI**       | OpenAI GPT-4o (resume analysis) · OpenAI Embeddings (semantic search) |
+| **AI**       | Google Gemini (resume analysis + skill extraction) · Gemini Embeddings (semantic search) |
 
 ---
 
