@@ -1,6 +1,7 @@
 """
 Applications router.
 
+<<<<<<< Updated upstream
   POST   /applications                 — create + fire AI pipeline (BackgroundTask)
   POST   /applications/{id}/reanalyze  — re-run pipeline for existing application
   GET    /applications/stats/summary   — aggregate stats
@@ -9,6 +10,16 @@ Applications router.
   PATCH  /applications/{id}/status     — update status (+ optional notes)
   PATCH  /applications/{id}/notes      — update notes only
   DELETE /applications/{id}            — delete application
+=======
+  POST   /applications                 - create + fire AI pipeline (BackgroundTask)
+  POST   /applications/{id}/reanalyze  - re-run pipeline for existing application
+  GET    /applications/stats/summary   - aggregate stats
+  GET    /applications                 - paginated list (filter / search / sort)
+  GET    /applications/{id}            - full detail + analysis_status
+  PATCH  /applications/{id}/status     - update status (+ optional notes)
+  PATCH  /applications/{id}/notes      - update notes only
+  DELETE /applications/{id}            - delete application
+>>>>>>> Stashed changes
 
 WHY BackgroundTasks for the pipeline:
     AI analysis (Gemini + Pinecone) can take 2-5 s. Blocking the HTTP
@@ -87,7 +98,7 @@ async def create_application(
     )
 
     logger.info(
-        "Application %s created for user %s — AI pipeline queued.",
+        "Application %s created for user %s - AI pipeline queued.",
         application.id,
         current_user.id,
     )
@@ -139,7 +150,11 @@ async def get_stats_summary(
     """
     Return aggregate statistics for the current user's applications.
 
+<<<<<<< Updated upstream
     All aggregation is done via SQLAlchemy func — no Python loops.
+=======
+    All aggregation is done via SQLAlchemy func - no Python loops.
+>>>>>>> Stashed changes
     """
     user_filter = JobApplication.user_id == current_user.id
 
