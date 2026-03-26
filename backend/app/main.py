@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -44,8 +44,8 @@ app.include_router(resume.router)
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
-    # WHY global handler: prevents raw 500 tracebacks leaking to the client;
-    # returns a consistent JSON error shape instead.
+    if isinstance(exc, HTTPException):
+        raise exc
     return JSONResponse(
         status_code=500,
         content={"detail": "An unexpected error occurred."},
@@ -55,3 +55,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 @app.get("/health", tags=["Health"])
 async def health_check():
     return {"status": "ok"}
+
+
+@app.get("/", tags=["Root"])
+async def root():
+    return {"message": "Job Tracker API"}
