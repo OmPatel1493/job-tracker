@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.database import engine
-from app.routers import applications, auth, resume, suggestions
+from app.routers import analytics, applications, auth, resume, suggestions
 
 
 @asynccontextmanager
@@ -41,6 +41,7 @@ app.include_router(auth.router)
 app.include_router(applications.router)
 app.include_router(resume.router)
 app.include_router(suggestions.router)
+app.include_router(analytics.router)
 
 
 @app.exception_handler(Exception)
