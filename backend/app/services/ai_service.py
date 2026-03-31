@@ -221,6 +221,116 @@ def _fallback_jd_extraction(jd_text: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Resume suggestion functions
+# ---------------------------------------------------------------------------
+
+def generate_resume_suggestions(
+    resume_text: str,
+    jd_text: str,
+    missing_skills: list[str],
+    job_title: str,
+    company_name: str,
+) -> list[dict]:
+    """
+    Generate 5 specific, actionable resume improvement suggestions using Gemini.
+
+    Sends the first 4000 chars of resume text and 3000 chars of the job
+    description to avoid exceeding token limits while retaining the most
+    relevant content. missing_skills are injected into the prompt so Gemini
+    can target gaps directly.
+
+    Falls back to _get_fallback_suggestions() if the API call fails or the
+    response cannot be parsed as JSON.
+
+    WHY truncate resume/JD:
+        The full texts can be 10k+ chars. Truncating keeps latency low and
+        avoids hitting Gemini's context limits while preserving the sections
+        that matter most (top of resume, start of JD).
+    """
+    prompt = (
+        "You are an expert career coach and technical resume writer.\n"
+        f"A candidate is applying for {job_title} at {company_name}.\n"
+        f"They are missing these skills: {missing_skills}\n\n"
+        f"Resume (first 4000 chars):\n{resume_text[:4000]}\n\n"
+        f"Job Description (first 3000 chars):\n{jd_text[:3000]}\n\n"
+        "Provide exactly 5 specific actionable suggestions to improve\n"
+        "their resume for this specific job.\n"
+        "Return ONLY a raw JSON array, no markdown, no explanation,\n"
+        "no code blocks:\n"
+        "[\n"
+        "  {\n"
+        '    "category": "skills|experience|formatting|keywords|projects",\n'
+        '    "priority": "high|medium|low",\n'
+        '    "suggestion": "specific actionable suggestion here",\n'
+        '    "example": "concrete example of how to implement this"\n'
+        "  }\n"
+        "]"
+    )
+
+    try:
+        model = genai.GenerativeModel(MODEL_NAME)
+        response = model.generate_content(prompt)
+        raw = response.text or ""
+
+        raw = raw.strip()
+        raw = raw.replace("```json", "").replace("```", "").strip()
+
+        return json.loads(raw)
+
+    except json.JSONDecodeError:
+        logger.warning("Gemini returned malformed JSON for resume suggestions - using fallback.")
+        return _get_fallback_suggestions(missing_skills)
+
+    except Exception as exc:
+        logger.warning("generate_resume_suggestions failed (%s) - using fallback.", exc)
+        return _get_fallback_suggestions(missing_skills)
+
+
+def _get_fallback_suggestions(missing_skills: list[str]) -> list[dict]:
+    """
+    Return 5 generic resume improvement suggestions when Gemini is unavailable.
+
+    Uses the same dict structure as generate_resume_suggestions() so callers
+    need no special-case handling. Always returns a valid list of 5 items
+    even when missing_skills is empty.
+    """
+    skills_str = ", ".join(missing_skills[:5]) if missing_skills else "relevant technical skills"
+
+    return [
+        {
+            "category": "skills",
+            "priority": "high",
+            "suggestion": f"Add a dedicated Skills section listing {skills_str} and other technical tools you know.",
+            "example": "Skills: Python, FastAPI, PostgreSQL, Docker, AWS (add all that apply)",
+        },
+        {
+            "category": "experience",
+            "priority": "high",
+            "suggestion": "Quantify your achievements with numbers, percentages, or scale.",
+            "example": "Reduced API response time by 40% by introducing Redis caching for frequent queries.",
+        },
+        {
+            "category": "projects",
+            "priority": "medium",
+            "suggestion": f"Add or expand projects that demonstrate {skills_str}.",
+            "example": "Built a REST API with FastAPI and PostgreSQL handling 10k requests/day - link to GitHub repo.",
+        },
+        {
+            "category": "keywords",
+            "priority": "medium",
+            "suggestion": "Mirror exact keywords from the job description in your bullet points.",
+            "example": "If the JD says 'distributed systems', use that phrase rather than 'large-scale systems'.",
+        },
+        {
+            "category": "formatting",
+            "priority": "low",
+            "suggestion": "Add a 2-3 line summary statement at the top tailored to this specific role.",
+            "example": "Backend engineer with 3 years building Python microservices, seeking to bring FastAPI and PostgreSQL expertise to [Company].",
+        },
+    ]
+
+
+# ---------------------------------------------------------------------------
 # Inline tests
 # ---------------------------------------------------------------------------
 
