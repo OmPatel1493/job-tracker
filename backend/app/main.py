@@ -44,7 +44,6 @@ app.include_router(suggestions.router)
 app.include_router(analytics.router)
 
 
-
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     if isinstance(exc, HTTPException):
