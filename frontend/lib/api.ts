@@ -83,6 +83,7 @@ export const createApplication = (data: {
   notes?: string;
   applied_date?: string;
   job_url?: string;
+  status?: string;
 }) => api.post<Application>("/applications", data);
 
 export const updateStatus = (id: number, status: string, notes?: string) =>
