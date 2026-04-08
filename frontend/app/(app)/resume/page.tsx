@@ -13,7 +13,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 
 const CATEGORIES = ["languages", "frameworks", "tools", "concepts", "other"] as const;
@@ -273,7 +272,7 @@ function ResumeDisplay({
           <p className="text-slate-300 text-sm">
             Are you sure you want to delete your resume? This action cannot be undone.
           </p>
-          <DialogFooter className="gap-2">
+          <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setDeleteOpen(false)}
               className="border-slate-600 text-slate-300">
               Cancel
@@ -283,7 +282,7 @@ function ResumeDisplay({
               {deleting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
               Delete
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
