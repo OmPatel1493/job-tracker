@@ -7,9 +7,16 @@ import {
   ArrowLeft,
   Building2,
   Calendar,
+  CheckCircle2,
   ExternalLink,
+  FileText,
+  Lightbulb,
+  Loader2,
   RefreshCw,
+  Sparkles,
+  StickyNote,
   Trash2,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -17,8 +24,11 @@ import {
   updateStatus,
   deleteApplication,
   reanalyzeApplication,
+  generateSuggestions,
+  getSuggestions,
+  updateNotes,
 } from "@/lib/api";
-import type { ApplicationDetail, ApplicationStatus } from "@/lib/types";
+import type { ApplicationDetail, ApplicationStatus, SuggestionItem } from "@/lib/types";
 import FitScoreGauge from "@/components/FitScoreGauge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -109,14 +119,35 @@ export default function ApplicationDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Suggestions
+  const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
+  const [generatingSuggestions, setGeneratingSuggestions] = useState(false);
+
+  // Job description collapse
+  const [jdExpanded, setJdExpanded] = useState(false);
+
+  // Notes inline edit
+  const [notesEditing, setNotesEditing] = useState(false);
+  const [notesDraft, setNotesDraft] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
+
   useEffect(() => {
     getApplication(id)
-      .then((res) => setApp(res.data))
+      .then((res) => {
+        setApp(res.data);
+        setNotesDraft(res.data.notes ?? "");
+      })
       .catch((err) => {
         if (err?.response?.status === 404) setNotFound(true);
         else toast.error("Failed to load application.");
       })
       .finally(() => setIsLoading(false));
+  }, [id]);
+
+  useEffect(() => {
+    getSuggestions(id)
+      .then((res) => setSuggestions(res.data.suggestions ?? []))
+      .catch(() => {}); // no suggestions yet is fine
   }, [id]);
 
   async function handleStatusChange(newStatus: string) {
@@ -139,6 +170,33 @@ export default function ApplicationDetailPage() {
       toast.error("Failed to start reanalysis.");
     } finally {
       setReanalyzing(false);
+    }
+  }
+
+  async function handleGenerateSuggestions() {
+    setGeneratingSuggestions(true);
+    try {
+      const res = await generateSuggestions(id);
+      setSuggestions(res.data.suggestions ?? []);
+      toast.success("Suggestions generated!");
+    } catch {
+      toast.error("Failed to generate suggestions.");
+    } finally {
+      setGeneratingSuggestions(false);
+    }
+  }
+
+  async function handleSaveNotes() {
+    setNotesSaving(true);
+    try {
+      const res = await updateNotes(id, notesDraft);
+      setApp((prev) => prev ? { ...prev, notes: res.data.notes } : prev);
+      setNotesEditing(false);
+      toast.success("Notes saved.");
+    } catch {
+      toast.error("Failed to save notes.");
+    } finally {
+      setNotesSaving(false);
     }
   }
 
@@ -323,6 +381,212 @@ export default function ApplicationDetailPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Section 1: Skills Analysis ── */}
+      {app.analysis_status === "complete" && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Matched skills */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0" />
+              <h2 className="text-sm font-semibold text-white">Matched Skills</h2>
+              <span className="ml-auto rounded-full bg-green-900/30 px-2 py-0.5 text-xs font-medium text-green-400">
+                {app.matched_skills?.length ?? 0}
+              </span>
+            </div>
+            {app.matched_skills && app.matched_skills.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {app.matched_skills.map((s) => (
+                  <span
+                    key={s}
+                    className="rounded-full border border-green-800/30 bg-green-900/20 px-2.5 py-0.5 text-xs font-medium text-green-300"
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No matched skills found</p>
+            )}
+          </div>
+
+          {/* Missing skills */}
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <XCircle className="h-5 w-5 text-red-400 shrink-0" />
+              <h2 className="text-sm font-semibold text-white">Missing Skills</h2>
+              <span className="ml-auto rounded-full bg-red-900/30 px-2 py-0.5 text-xs font-medium text-red-400">
+                {app.missing_skills?.length ?? 0}
+              </span>
+            </div>
+            {app.missing_skills && app.missing_skills.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {app.missing_skills.map((s) => (
+                  <span
+                    key={s}
+                    className="rounded-full border border-red-800/30 bg-red-900/20 px-2.5 py-0.5 text-xs font-medium text-red-300"
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No missing skills — great match!</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Section 2: AI Suggestions ── */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Lightbulb className="h-5 w-5 text-yellow-400 shrink-0" />
+          <h2 className="text-sm font-semibold text-white">AI Resume Suggestions</h2>
+        </div>
+
+        {suggestions.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <p className="text-sm text-slate-400">
+              Get personalized suggestions to improve your resume
+            </p>
+            <button
+              onClick={handleGenerateSuggestions}
+              disabled={generatingSuggestions}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {generatingSuggestions ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {generatingSuggestions ? "Generating..." : "Generate Suggestions"}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {suggestions.map((s, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-slate-700 bg-slate-800 p-4 space-y-2"
+              >
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                      s.priority === "high"
+                        ? "bg-red-900/30 text-red-400"
+                        : s.priority === "medium"
+                        ? "bg-yellow-900/30 text-yellow-400"
+                        : "bg-slate-700 text-slate-400"
+                    }`}
+                  >
+                    {s.priority}
+                  </span>
+                  <span className="rounded-full bg-blue-900/30 px-2.5 py-0.5 text-xs font-medium text-blue-400">
+                    {s.category}
+                  </span>
+                </div>
+                <p className="text-sm text-white">{s.suggestion}</p>
+                {s.example && (
+                  <p className="text-xs text-slate-400 italic">{s.example}</p>
+                )}
+              </div>
+            ))}
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={handleGenerateSuggestions}
+                disabled={generatingSuggestions}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 transition-colors"
+              >
+                {generatingSuggestions && <Loader2 className="h-3 w-3 animate-spin" />}
+                Regenerate
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Section 3: Job Description ── */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <FileText className="h-5 w-5 text-slate-400 shrink-0" />
+          <h2 className="text-sm font-semibold text-white">Job Description</h2>
+        </div>
+        {app.job_description ? (
+          <>
+            <div
+              className={`whitespace-pre-wrap text-sm text-slate-300 leading-relaxed overflow-y-auto ${
+                jdExpanded ? "max-h-[600px]" : ""
+              }`}
+            >
+              {jdExpanded
+                ? app.job_description
+                : app.job_description.slice(0, 500) +
+                  (app.job_description.length > 500 ? "..." : "")}
+            </div>
+            {app.job_description.length > 500 && (
+              <button
+                onClick={() => setJdExpanded((p) => !p)}
+                className="mt-3 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              >
+                {jdExpanded ? "Show less" : "Show more"}
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-slate-500">No job description available.</p>
+        )}
+      </div>
+
+      {/* ── Section 4: Notes ── */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <StickyNote className="h-5 w-5 text-slate-400 shrink-0" />
+          <h2 className="text-sm font-semibold text-white">Notes</h2>
+        </div>
+
+        {notesEditing ? (
+          <div className="space-y-3">
+            <textarea
+              value={notesDraft}
+              onChange={(e) => setNotesDraft(e.target.value)}
+              rows={5}
+              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y"
+              placeholder="Add your notes here..."
+              autoFocus
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  setNotesEditing(false);
+                  setNotesDraft(app.notes ?? "");
+                }}
+                className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveNotes}
+                disabled={notesSaving}
+                className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {notesSaving && <Loader2 className="h-3 w-3 animate-spin" />}
+                Save
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            onClick={() => setNotesEditing(true)}
+            className="min-h-[80px] cursor-text rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 hover:border-slate-500 transition-colors"
+          >
+            {app.notes ? (
+              <p className="whitespace-pre-wrap text-sm text-slate-300">{app.notes}</p>
+            ) : (
+              <p className="text-sm text-slate-500">Click to add notes...</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Delete dialog */}

@@ -89,6 +89,9 @@ export const createApplication = (data: {
 export const updateStatus = (id: number, status: string, notes?: string) =>
   api.patch<Application>(`/applications/${id}/status`, { status, notes });
 
+export const updateNotes = (id: number, notes: string) =>
+  api.patch<ApplicationDetail>(`/applications/${id}/notes`, { notes });
+
 export const deleteApplication = (id: number) =>
   api.delete(`/applications/${id}`);
 
