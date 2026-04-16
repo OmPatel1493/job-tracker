@@ -14,11 +14,14 @@ pydantic[email]==2.10.3
 
 # Auth
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
 python-multipart==0.0.12
 
+# PDF parsing
+pdfplumber==0.11.4
+
 # AI (used in later weeks)
-openai==1.57.0
+google-generativeai==0.8.3
 pinecone-client==3.2.2
 
 # Testing

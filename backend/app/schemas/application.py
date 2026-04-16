@@ -1,48 +1,98 @@
-from datetime import date
+from datetime import date, datetime
+from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.job_application import ApplicationStatus
 
+# ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
 
 class ApplicationCreate(BaseModel):
-    company_name: str
-    job_title: str
-    job_description: str | None = None
-    job_url: str | None = None
-    location: str | None = None
-    is_remote: bool = False
-    status: ApplicationStatus = ApplicationStatus.APPLIED
-    application_date: date | None = None
-    salary_min: int | None = None
-    salary_max: int | None = None
+    company_name: str = Field(..., min_length=1)
+    job_title: str = Field(..., min_length=1)
+    job_description: str = Field(..., min_length=50, max_length=20_000)
+    notes: Optional[str] = None
+    applied_date: Optional[date] = None
+    job_url: Optional[str] = None
 
 
-class ApplicationUpdate(BaseModel):
-    company_name: str | None = None
-    job_title: str | None = None
-    job_description: str | None = None
-    job_url: str | None = None
-    location: str | None = None
-    is_remote: bool | None = None
-    status: ApplicationStatus | None = None
-    application_date: date | None = None
-    salary_min: int | None = None
-    salary_max: int | None = None
+class ApplicationStatusUpdate(BaseModel):
+    status: Literal["saved", "applied", "phone_screen", "interview", "offer", "rejected", "withdrawn"]
+    notes: Optional[str] = None
+
+
+class ApplicationNotesUpdate(BaseModel):
+    notes: str
+
+
+# ---------------------------------------------------------------------------
+# Response models — shared
+# ---------------------------------------------------------------------------
+
+class MatchResult(BaseModel):
+    fit_score: float
+    fit_score_pct: int
+    fit_label: str
+    semantic_score: float
+    skill_overlap_score: float
+    matched_skills: list[str]
+    missing_skills: list[str]
+    total_jd_skills: int
+    total_matched: int
+    total_missing: int
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ApplicationResponse(BaseModel):
+    """Light response — used for list views."""
     id: int
     user_id: int
     company_name: str
     job_title: str
-    job_description: str | None
-    job_url: str | None
-    location: str | None
-    is_remote: bool
-    status: ApplicationStatus
-    application_date: date | None
-    salary_min: int | None
-    salary_max: int | None
+    status: str
+    fit_score_pct: Optional[int] = None
+    fit_label: Optional[str] = None
+    applied_date: Optional[date] = None
+    job_url: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ApplicationDetailResponse(ApplicationResponse):
+    """Full response — used for detail/single-item views."""
+    job_description: str
+    jd_skills: Optional[dict] = None
+    matched_skills: Optional[list[str]] = None
+    missing_skills: Optional[list[str]] = None
+    semantic_score: Optional[float] = None
+    skill_overlap_score: Optional[float] = None
+    notes: Optional[str] = None
+    analysis_status: str = "pending"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ---------------------------------------------------------------------------
+# Response models — Day 20
+# ---------------------------------------------------------------------------
+
+class ApplicationListResponse(BaseModel):
+    """Paginated list response wrapper."""
+    items: list[ApplicationResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class ApplicationStatsResponse(BaseModel):
+    """Aggregate stats for the current user's applications."""
+    total: int
+    by_status: dict[str, int]
+    avg_fit_score: Optional[float] = None
+    highest_fit_score: Optional[float] = None
+    analyzed_count: int
+    pending_analysis_count: int
