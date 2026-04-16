@@ -51,15 +51,17 @@ function CardSkeleton() {
 
 // ─── Stats bar ────────────────────────────────────────────────────────────────
 
-function StatsBar({ summary }: { summary: AnalyticsSummary | null }) {
+function StatsBar({ summary, loading }: { summary: AnalyticsSummary | null; loading: boolean }) {
   const stats = [
     {
       label: "Total",
       value: summary ? String(summary.total_applications) : "--",
+      tooltip: "Total number of job applications you have tracked",
     },
     {
       label: "Analyzed",
       value: summary ? String(summary.analyzed_count) : "--",
+      tooltip: "Applications that have completed AI fit score analysis",
     },
     {
       label: "Avg Score",
@@ -67,19 +69,35 @@ function StatsBar({ summary }: { summary: AnalyticsSummary | null }) {
         summary && summary.avg_fit_score_pct !== null
           ? `${summary.avg_fit_score_pct}%`
           : "--",
+      tooltip: "Average fit score across all analyzed applications",
     },
     {
       label: "Interview Rate",
       value: summary ? `${summary.interview_rate}%` : "--",
+      tooltip: "Percentage of applications that reached the interview stage",
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 space-y-2">
+            <Skeleton className="h-6 w-12" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
       {stats.map((s) => (
         <div
           key={s.label}
-          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3"
+          title={s.tooltip}
+          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 cursor-default"
         >
           <p className="text-xl font-bold text-white">{s.value}</p>
           <p className="text-xs text-slate-400 mt-0.5">{s.label}</p>
@@ -101,6 +119,8 @@ export default function ApplicationsPage() {
   const [sort, setSort] = useState("newest");
   const [offset, setOffset] = useState(0);
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Map sort value → API param
@@ -118,6 +138,7 @@ export default function ApplicationsPage() {
       offset: number;
       append: boolean;
     }) => {
+      setError(null);
       try {
         const res = await getApplications({
           search: opts.search || undefined,
@@ -130,6 +151,7 @@ export default function ApplicationsPage() {
         setApplications((prev) => (opts.append ? [...prev, ...items] : items));
         setTotal(total);
       } catch {
+        if (!opts.append) setError("Failed to load applications. Try again.");
         toast.error("Failed to load applications.");
       }
     },
@@ -139,11 +161,13 @@ export default function ApplicationsPage() {
   // Initial load + summary
   useEffect(() => {
     setIsLoading(true);
+    setSummaryLoading(true);
     Promise.all([
       fetchApplications({ search, status, sort, offset: 0, append: false }),
       getAnalyticsSummary()
         .then((r) => setSummary(r.data))
-        .catch(() => {}),
+        .catch(() => {})
+        .finally(() => setSummaryLoading(false)),
     ]).finally(() => setIsLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -159,7 +183,7 @@ export default function ApplicationsPage() {
   }, [status, sort]);
 
   // Debounced search
-  function handleSearchChange(value: string) {
+  const handleSearchChange = useCallback((value: string) => {
     setSearch(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -173,7 +197,8 @@ export default function ApplicationsPage() {
         append: false,
       }).finally(() => setIsLoading(false));
     }, 300);
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, sort]);
 
   async function handleLoadMore() {
     const newOffset = offset + LIMIT;
@@ -210,7 +235,7 @@ export default function ApplicationsPage() {
       </div>
 
       {/* Stats */}
-      <StatsBar summary={summary} />
+      <StatsBar summary={summary} loading={summaryLoading} />
 
       {/* Filter bar */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -245,12 +270,39 @@ export default function ApplicationsPage() {
             </option>
           ))}
         </select>
+        {hasFilters && (
+          <button
+            onClick={() => {
+              setSearch("");
+              setStatus("");
+              setOffset(0);
+            }}
+            className="rounded-lg border border-slate-600 px-3 py-2 text-sm text-slate-400 hover:text-white hover:border-slate-500 transition-colors whitespace-nowrap"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* List */}
       <div className="space-y-3">
         {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
+          Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} />)
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center rounded-xl border border-slate-700 bg-slate-800 py-12 text-center gap-3">
+            <p className="text-slate-400 text-sm">{error}</p>
+            <button
+              onClick={() => {
+                setIsLoading(true);
+                fetchApplications({ search, status, sort, offset: 0, append: false }).finally(
+                  () => setIsLoading(false)
+                );
+              }}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+            >
+              Try again
+            </button>
+          </div>
         ) : showEmpty ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Briefcase className="h-12 w-12 text-slate-600 mb-4" />
