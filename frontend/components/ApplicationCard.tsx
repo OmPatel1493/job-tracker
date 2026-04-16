@@ -42,6 +42,16 @@ function formatDate(iso: string) {
   });
 }
 
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+  return `${Math.floor(days / 30)} months ago`;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ApplicationCard({
@@ -55,7 +65,7 @@ export default function ApplicationCard({
   return (
     <div
       onClick={() => router.push(`/applications/${application.id}`)}
-      className="flex items-center gap-4 rounded-xl border border-slate-700 bg-slate-800 px-5 py-4 cursor-pointer hover:bg-slate-800/80 transition-colors"
+      className="flex items-center gap-4 rounded-xl border border-slate-700 bg-slate-800 px-5 py-4 cursor-pointer hover:bg-slate-800/80 transition-all duration-200 hover:translate-x-1"
     >
       {/* Company avatar */}
       <div className="h-10 w-10 shrink-0 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-semibold text-sm">
@@ -77,11 +87,11 @@ export default function ApplicationCard({
         >
           {STATUS_LABELS[application.status]}
         </span>
-        {application.applied_date && (
-          <span className="text-xs text-slate-500">
-            {formatDate(application.applied_date)}
+        <span className="text-xs text-slate-500">
+            {application.applied_date
+              ? formatDate(application.applied_date)
+              : timeAgo(application.created_at)}
           </span>
-        )}
       </div>
 
       {/* Fit score */}
@@ -98,7 +108,15 @@ export default function ApplicationCard({
             </span>
           </>
         ) : (
-          <span className="text-slate-500 text-sm font-medium">--</span>
+          <div className="flex flex-col items-center gap-1">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-slate-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-slate-500" />
+            </span>
+            <span className="text-xs text-slate-400 leading-tight text-center">
+              Analyzing...
+            </span>
+          </div>
         )}
       </div>
 
