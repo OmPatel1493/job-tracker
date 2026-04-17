@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Briefcase, Plus, Search } from "lucide-react";
+import { Briefcase, Columns2, List, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
-import { getApplications, getAnalyticsSummary } from "@/lib/api";
+import { getApplications, getAnalyticsSummary, updateStatus } from "@/lib/api";
 import type { AnalyticsSummary, Application } from "@/lib/types";
 import ApplicationCard from "@/components/ApplicationCard";
+import StatusKanban from "@/components/StatusKanban";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -121,6 +122,9 @@ export default function ApplicationsPage() {
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<"list" | "kanban">("list");
+  const [allApplications, setAllApplications] = useState<Application[]>([]);
+  const [kanbanLoading, setKanbanLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Map sort value → API param
@@ -200,6 +204,28 @@ export default function ApplicationsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, sort]);
 
+  async function fetchAllForKanban() {
+    setKanbanLoading(true);
+    try {
+      const res = await getApplications({ limit: 500, sort_by: "newest" });
+      setAllApplications(res.data.items);
+    } catch {
+      toast.error("Failed to load applications for kanban.");
+    } finally {
+      setKanbanLoading(false);
+    }
+  }
+
+  async function handleKanbanStatusChange(id: number, newStatus: string) {
+    await updateStatus(id, newStatus);
+    await fetchAllForKanban();
+  }
+
+  function handleViewChange(v: "list" | "kanban") {
+    setView(v);
+    if (v === "kanban" && allApplications.length === 0) fetchAllForKanban();
+  }
+
   async function handleLoadMore() {
     const newOffset = offset + LIMIT;
     setOffset(newOffset);
@@ -225,13 +251,40 @@ export default function ApplicationsPage() {
           <Briefcase className="h-6 w-6 text-blue-400" />
           <h1 className="text-xl font-semibold text-white">Applications</h1>
         </div>
-        <Link
-          href="/applications/new"
-          className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Add Application
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-1">
+            <button
+              onClick={() => handleViewChange("list")}
+              title="List view"
+              className={`rounded p-1.5 transition-colors ${
+                view === "list"
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <List className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => handleViewChange("kanban")}
+              title="Kanban view"
+              className={`rounded p-1.5 transition-colors ${
+                view === "kanban"
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Columns2 className="h-4 w-4" />
+            </button>
+          </div>
+          <Link
+            href="/applications/new"
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Application
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
@@ -284,8 +337,27 @@ export default function ApplicationsPage() {
         )}
       </div>
 
+      {/* Kanban view */}
+      {view === "kanban" && (
+        kanbanLoading ? (
+          <div className="flex gap-3 overflow-x-auto pb-4">
+            {[0,1,2,3,4].map((i) => (
+              <div key={i} className="min-w-[280px] space-y-2">
+                <Skeleton className="h-6 w-32" />
+                <Skeleton className="h-[400px] w-full rounded-xl" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <StatusKanban
+            applications={allApplications}
+            onStatusChange={handleKanbanStatusChange}
+          />
+        )
+      )}
+
       {/* List */}
-      <div className="space-y-3">
+      {view === "list" && <div className="space-y-3">
         {isLoading ? (
           Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} />)
         ) : error ? (
@@ -341,10 +413,10 @@ export default function ApplicationsPage() {
             <ApplicationCard key={app.id} application={app} />
           ))
         )}
-      </div>
+      </div>}
 
       {/* Pagination */}
-      {!isLoading && applications.length > 0 && (
+      {view === "list" && !isLoading && applications.length > 0 && (
         <div className="flex flex-col items-center gap-3 pt-2">
           <p className="text-sm text-slate-500">
             Showing {applications.length} of {total} applications
