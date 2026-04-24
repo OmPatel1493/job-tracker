@@ -91,7 +91,7 @@ export default function DashboardPage() {
   useEffect(() => {
     Promise.all([
       getAnalyticsSummary().then((r) => setSummary(r.data)),
-      getApplications({ limit: 5, sort_by: "newest" }).then((r) =>
+      getApplications({ limit: 5, sort_by: "created_at", order: "desc" }).then((r) =>
         setRecentApps(r.data.items)
       ),
     ])

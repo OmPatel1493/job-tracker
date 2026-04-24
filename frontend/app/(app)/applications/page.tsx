@@ -127,11 +127,11 @@ export default function ApplicationsPage() {
   const [kanbanLoading, setKanbanLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Map sort value → API param
-  function sortParam(s: string) {
-    if (s === "oldest") return "oldest";
-    if (s === "score") return "score";
-    return "newest";
+  // Map sort value → backend sort_by + order params
+  function sortParams(s: string): { sort_by: string; order: string } {
+    if (s === "oldest") return { sort_by: "created_at", order: "asc" };
+    if (s === "score") return { sort_by: "fit_score_pct", order: "desc" };
+    return { sort_by: "created_at", order: "desc" };
   }
 
   const fetchApplications = useCallback(
@@ -144,10 +144,12 @@ export default function ApplicationsPage() {
     }) => {
       setError(null);
       try {
+        const { sort_by, order } = sortParams(opts.sort);
         const res = await getApplications({
           search: opts.search || undefined,
           status: opts.status || undefined,
-          sort_by: sortParam(opts.sort),
+          sort_by,
+          order,
           limit: LIMIT,
           offset: opts.offset,
         });

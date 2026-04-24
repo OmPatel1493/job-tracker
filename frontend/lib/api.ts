@@ -65,6 +65,7 @@ export const getApplications = (params?: {
   status?: string;
   search?: string;
   sort_by?: string;
+  order?: string;
   limit?: number;
   offset?: number;
 }) =>
