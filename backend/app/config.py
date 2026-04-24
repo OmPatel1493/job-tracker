@@ -11,7 +11,6 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # AI (optional until Week 4)
-    GEMINI_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
     PINECONE_API_KEY: str = ""
     PINECONE_ENVIRONMENT: str = ""
