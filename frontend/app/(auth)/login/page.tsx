@@ -26,8 +26,14 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) });
+
+  function fillDemo() {
+    setValue("email", "demo@jobtracker.ai");
+    setValue("password", "Demo1234!");
+  }
 
   async function onSubmit(data: FormData) {
     setIsLoading(true);
@@ -119,6 +125,17 @@ export default function LoginPage() {
             Sign in
           </button>
         </form>
+
+        {/* Demo account */}
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={fillDemo}
+            className="w-full rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-400 hover:text-white hover:border-slate-500 transition-colors"
+          >
+            Try with demo account
+          </button>
+        </div>
 
         {/* Footer */}
         <p className="mt-6 text-center text-sm text-slate-400">

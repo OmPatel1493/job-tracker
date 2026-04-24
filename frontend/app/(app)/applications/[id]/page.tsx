@@ -150,6 +150,20 @@ export default function ApplicationDetailPage() {
       .catch(() => {}); // no suggestions yet is fine
   }, [id]);
 
+  // Poll every 5s while analysis is pending
+  useEffect(() => {
+    if (!app || app.analysis_status === "complete") return;
+    const timer = setInterval(async () => {
+      try {
+        const res = await getApplication(id);
+        setApp(res.data);
+      } catch {
+        // silently ignore transient poll errors
+      }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [id, app?.analysis_status]);
+
   async function handleStatusChange(newStatus: string) {
     if (!app) return;
     try {
@@ -232,6 +246,16 @@ export default function ApplicationDetailPage() {
 
   return (
     <div className="space-y-6 max-w-5xl">
+      {/* Analysis pending banner */}
+      {app.analysis_status !== "complete" && (
+        <div className="flex items-center gap-3 rounded-lg border border-yellow-700/50 bg-yellow-900/20 px-4 py-3">
+          <Loader2 className="h-4 w-4 animate-spin text-yellow-400 shrink-0" />
+          <p className="text-sm text-yellow-300">
+            AI analysis in progress… This usually takes 10–20 seconds.
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="space-y-1">

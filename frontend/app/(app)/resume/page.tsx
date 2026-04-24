@@ -166,13 +166,22 @@ function ResumeDisplay({
   resume,
   onReplace,
   onDeleted,
+  autoScroll,
 }: {
   resume: Resume;
   onReplace: () => void;
   onDeleted: () => void;
+  autoScroll?: boolean;
 }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const skillsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (autoScroll) {
+      setTimeout(() => skillsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+    }
+  }, [autoScroll]);
 
   async function handleDelete() {
     setDeleting(true);
@@ -241,7 +250,7 @@ function ResumeDisplay({
       </div>
 
       {/* Skills breakdown */}
-      <div className="space-y-4">
+      <div ref={skillsRef} className="space-y-4">
         {CATEGORIES.map((cat) => {
           const skills: string[] = resume.parsed_skills?.[cat] ?? [];
           return (
@@ -295,6 +304,7 @@ export default function ResumePage() {
   const [resume, setResume] = useState<Resume | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
+  const [justUploaded, setJustUploaded] = useState(false);
 
   useEffect(() => {
     getResume()
@@ -311,6 +321,7 @@ export default function ResumePage() {
         onUploaded={(r) => {
           setResume(r);
           setShowUpload(false);
+          setJustUploaded(true);
         }}
       />
     );
@@ -319,6 +330,7 @@ export default function ResumePage() {
   return (
     <ResumeDisplay
       resume={resume}
+      autoScroll={justUploaded}
       onReplace={() => setShowUpload(true)}
       onDeleted={() => {
         setResume(null);
