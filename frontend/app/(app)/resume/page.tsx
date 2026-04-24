@@ -41,7 +41,7 @@ function ResumeSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-8 w-48" />
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[0, 1, 2].map((i) => (
           <Skeleton key={i} className="h-24 rounded-xl" />
         ))}
@@ -216,7 +216,7 @@ function ResumeDisplay({
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-xl bg-slate-800 border border-slate-700 p-4 flex items-center gap-3">
           <Zap className="h-5 w-5 text-blue-400 shrink-0" />
           <div>
