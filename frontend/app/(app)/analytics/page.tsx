@@ -26,6 +26,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { toast } from "sonner";
 import { getAnalyticsSummary, getApplications } from "@/lib/api";
 import type { AnalyticsSummary, Application } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -193,7 +194,7 @@ export default function AnalyticsPage() {
       getAnalyticsSummary().then((r) => setSummary(r.data)),
       getApplications({ limit: 100 }).then((r) => setApplications(r.data.items)),
     ])
-      .catch(() => {})
+      .catch(() => toast.error("Failed to load analytics data."))
       .finally(() => setIsLoading(false));
   }, []);
 

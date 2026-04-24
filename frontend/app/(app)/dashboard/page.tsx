@@ -23,6 +23,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { toast } from "sonner";
 import { getAnalyticsSummary, getApplications } from "@/lib/api";
 import type { AnalyticsSummary, Application } from "@/lib/types";
 import ApplicationCard from "@/components/ApplicationCard";
@@ -94,11 +95,37 @@ export default function DashboardPage() {
         setRecentApps(r.data.items)
       ),
     ])
-      .catch(() => {})
+      .catch(() => toast.error("Failed to load dashboard data."))
       .finally(() => setIsLoading(false));
   }, []);
 
   if (isLoading) return <DashboardSkeleton />;
+
+  if (summary !== null && summary.total_applications === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+        <Briefcase className="h-16 w-16 text-slate-600" />
+        <h2 className="text-xl font-semibold text-white">Welcome to JobTracker AI</h2>
+        <p className="text-slate-400 max-w-sm text-sm">
+          Start by uploading your resume and adding your first application
+        </p>
+        <div className="flex gap-3 mt-2 flex-wrap justify-center">
+          <Link
+            href="/resume"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+          >
+            Upload Resume
+          </Link>
+          <Link
+            href="/applications/new"
+            className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-medium text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
+          >
+            Add Application
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   // ── Derived data ────────────────────────────────────────────────────────────
 
