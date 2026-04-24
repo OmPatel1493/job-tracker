@@ -23,5 +23,5 @@ class Note(TimestampMixin, Base):
 
     # One application → many notes
     application: Mapped["JobApplication"] = relationship(
-        "JobApplication", back_populates="notes"
+        "JobApplication", back_populates="note_entries"
     )
