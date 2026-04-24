@@ -27,7 +27,7 @@ class SkillExtractionError(RuntimeError):
     Raised when skill extraction fails unrecoverably.
 
     In practice this is only raised when both the AI call AND the regex
-    fallback fail — which should never happen unless the input is empty.
+    fallback fail - which should never happen unless the input is empty.
     """
 
     def __init__(self, message: str, detail: str | None = None) -> None:

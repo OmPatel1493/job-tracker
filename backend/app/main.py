@@ -5,12 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.database import engine
+from app.config import settings
 from app.routers import analytics, applications, auth, resume, suggestions
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # startup: nothing needed yet — Alembic handles migrations
+    # startup: nothing needed yet - Alembic handles migrations
     yield
     # shutdown: close DB connection pool
     await engine.dispose()
@@ -25,12 +26,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://192.168.2.168:3000",
-        "http://192.168.2.168:3001",
-    ],
+    allow_origins=[o.strip() for o in settings.CORS_ORIGINS.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

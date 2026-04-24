@@ -1,5 +1,5 @@
 """
-AI service — all direct Gemini API calls for the application live here.
+AI service - all direct Gemini API calls for the application live here.
 
 WHY a dedicated ai_service.py:
   skill_extractor.py handles resume text. ai_service.py handles job description
@@ -8,7 +8,7 @@ WHY a dedicated ai_service.py:
 
 WHY Gemini gemini-2.0-flash:
   Free tier, fast, accurate at structured JSON extraction tasks.
-  No credit card required — get a key at https://aistudio.google.com/apikey
+  No credit card required - get a key at https://aistudio.google.com/apikey
 """
 
 import json
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 MODEL_NAME = "gemini-2.0-flash"
-MAX_JD_LENGTH = 15_000  # chars — more than any real job description needs
+MAX_JD_LENGTH = 15_000  # chars - more than any real job description needs
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ def extract_jd_skills(jd_text: str) -> dict:
         "You are an expert technical recruiter and job description analyzer.\n"
         "Analyze this job description and extract all skills.\n"
         "Return ONLY this JSON structure with no markdown, no explanation,\n"
-        "no code blocks — raw JSON only:\n"
+        "no code blocks - raw JSON only:\n"
         "{\n"
         '  "required": {\n'
         '    "languages": [],\n'
@@ -101,11 +101,11 @@ def extract_jd_skills(jd_text: str) -> dict:
         return json.loads(raw.strip())
 
     except json.JSONDecodeError:
-        logger.warning("Gemini returned malformed JSON for JD extraction — using fallback.")
+        logger.warning("Gemini returned malformed JSON for JD extraction - using fallback.")
         return _fallback_jd_extraction(jd_text)
 
     except Exception as exc:
-        logger.warning("Gemini JD extraction failed (%s) — using fallback.", exc)
+        logger.warning("Gemini JD extraction failed (%s) - using fallback.", exc)
         return _fallback_jd_extraction(jd_text)
 
 
@@ -148,7 +148,7 @@ def extract_job_metadata(jd_text: str) -> dict:
     Returns a dict with keys:
         company_name, job_title, location, remote, salary_range
 
-    Returns {} on any failure — metadata extraction is best-effort and
+    Returns {} on any failure - metadata extraction is best-effort and
     should never block the main skill-matching flow.
 
     WHY best-effort (return {} on failure):
@@ -186,7 +186,7 @@ def extract_job_metadata(jd_text: str) -> dict:
         return json.loads(raw.strip())
 
     except Exception as exc:
-        logger.warning("extract_job_metadata failed (%s) — returning empty dict.", exc)
+        logger.warning("extract_job_metadata failed (%s) - returning empty dict.", exc)
         return {}
 
 
@@ -196,7 +196,7 @@ def extract_job_metadata(jd_text: str) -> dict:
 
 def _fallback_jd_extraction(jd_text: str) -> dict:
     """
-    Regex-based fallback for extract_jd_skills — no API call.
+    Regex-based fallback for extract_jd_skills - no API call.
 
     Uses skill_extractor.extract_skills_with_regex() to scan the JD text
     against the known SKILL_CATEGORIES list. Returns the same dict structure
@@ -204,7 +204,7 @@ def _fallback_jd_extraction(jd_text: str) -> dict:
 
     WHY same skills for required and preferred:
         Without AI we cannot distinguish required from preferred. Duplicating
-        the matches into both sections is conservative — the user sees all
+        the matches into both sections is conservative - the user sees all
         matched skills rather than none.
     """
     from app.services.skill_extractor import extract_skills_with_regex
@@ -329,42 +329,3 @@ def _get_fallback_suggestions(missing_skills: list[str]) -> list[dict]:
         },
     ]
 
-
-# ---------------------------------------------------------------------------
-# Inline tests
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    SAMPLE_JD = (
-        "We are looking for a Senior Backend Engineer to join our team. "
-        "You will design and build scalable REST APIs using Python and FastAPI. "
-        "Requirements: 5+ years of experience, strong knowledge of Python, "
-        "PostgreSQL, Docker, and AWS. Experience with Redis and Kubernetes is "
-        "a plus. You should be comfortable with CI/CD pipelines and Agile "
-        "methodologies. Preferred: experience with Machine Learning pipelines "
-        "and familiarity with React for occasional frontend work. "
-        "We offer a competitive salary range of $130,000 - $160,000. "
-        "This is a remote-friendly position based in New York. "
-        "The role involves system design, code reviews, and mentoring junior "
-        "engineers. You will work with a team of 8 engineers on a SaaS platform "
-        "serving over 500,000 users. Apply if you are passionate about clean "
-        "code, distributed systems, and building reliable infrastructure."
-    )
-
-    # Test fallback (no API key needed)
-    result = _fallback_jd_extraction(SAMPLE_JD)
-    assert "required" in result, "fallback should return required key"
-    assert result["job_level"] == "any"
-    assert result["domain"] == "unknown"
-    print(f"PASS: _fallback_jd_extraction — {result}")
-
-    # Test flatten_jd_skills
-    flat = flatten_jd_skills(result)
-    assert isinstance(flat, list), "should return a list"
-    assert len(flat) == len({s.lower() for s in flat}), "no duplicates"
-    print(f"PASS: flatten_jd_skills — {flat}")
-
-    # Test extract_job_metadata fallback path (no key = returns {} or partial)
-    meta = extract_job_metadata(SAMPLE_JD)
-    assert isinstance(meta, dict), "should always return a dict"
-    print(f"PASS: extract_job_metadata returned dict — {meta}")

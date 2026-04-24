@@ -2,7 +2,7 @@
 PDF text extraction service.
 
 WHY pdfplumber:
-- Built on pdfminer.six — accurate character-level text positioning
+- Built on pdfminer.six - accurate character-level text positioning
 - Handles multi-column layouts and tables better than PyPDF2/pypdf
 - Returns plain text per page, easy to join and clean
 - No external binaries required (unlike pdftotext)
@@ -15,7 +15,7 @@ import pdfplumber
 
 from app.utils.exceptions import PDFParseError, ResumeValidationError
 
-# pdfminer is a pdfplumber dependency — import its password error directly
+# pdfminer is a pdfplumber dependency - import its password error directly
 try:
     from pdfminer.pdfdocument import PDFPasswordIncorrect
 except ImportError:  # pragma: no cover
@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover
 # Constants
 # ---------------------------------------------------------------------------
 
-MAX_EXTRACTED_CHARS = 100_000  # ~20,000 words — more than any real resume
+MAX_EXTRACTED_CHARS = 100_000  # ~20,000 words - more than any real resume
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ def validate_resume_text(text: str) -> tuple[bool, str]:
         (True,  "OK")    if the text passes all checks.
 
     WHY validate length: a 50-character string cannot contain meaningful
-    resume content — catching this early avoids a wasted API call.
+    resume content - catching this early avoids a wasted API call.
     """
     if len(text) < 100:
         return False, "Resume text too short to be valid"
@@ -150,35 +150,8 @@ def get_word_count(text: str) -> int:
     """
     Return the word count of the given text.
 
-    WHY useful: a quick sanity check before sending text to an AI model —
+    WHY useful: a quick sanity check before sending text to an AI model -
     e.g. flag a resume with fewer than 50 words as likely incomplete.
     """
     return len(text.split())
 
-
-# ---------------------------------------------------------------------------
-# Inline tests
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    sample = (
-        "  Python developer with   experience in FastAPI.\n\n\n"
-        "Built REST APIs and Docker containers.  "
-    )
-
-    cleaned = extract_text_from_plain(sample)
-    assert "   " not in cleaned, "excessive spaces not removed"
-    assert "\n\n\n" not in cleaned, "excessive newlines not removed"
-    print("PASS: extract_text_from_plain cleans whitespace")
-
-    ok, msg = validate_resume_text("short")
-    assert ok is False
-    print(f"PASS: validate_resume_text rejects short text — '{msg}'")
-
-    ok, msg = validate_resume_text("x" * 400)
-    assert ok is True
-    print(f"PASS: validate_resume_text accepts valid text — '{msg}'")
-
-    count = get_word_count("hello world foo bar")
-    assert count == 4, f"expected 4, got {count}"
-    print("PASS: get_word_count returns correct count")

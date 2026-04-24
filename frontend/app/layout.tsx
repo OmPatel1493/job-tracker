@@ -7,8 +7,11 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Job Tracker",
-  description: "AI-powered job application tracker",
+  title: {
+    default: "JobTracker AI",
+    template: "%s | JobTracker AI",
+  },
+  description: "AI-powered job application tracker with resume matching and skill gap analysis",
 };
 
 export default function RootLayout({

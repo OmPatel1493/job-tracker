@@ -35,10 +35,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/resume", tags=["Resume"])
 
-# 10 MB hard cap — well above any real resume; protects against accidental large uploads
+# 10 MB hard cap - well above any real resume; protects against accidental large uploads
 MAX_PDF_BYTES = 10 * 1024 * 1024
 
-# PDF magic bytes — first 4 bytes of every valid PDF file
+# PDF magic bytes - first 4 bytes of every valid PDF file
 _PDF_MAGIC = b"%PDF"
 
 
@@ -51,9 +51,9 @@ class ResumeUploadWithAiStatus(ResumeUploadResponse):
     Extends the base upload response with an AI processing status field.
 
     ai_status values:
-      "full"        — Gemini processed and returned skills
-      "fallback"    — Gemini failed; regex extraction was used instead
-      "unavailable" — both Gemini and regex failed (skills will be empty)
+      "full"        - Gemini processed and returned skills
+      "fallback"    - Gemini failed; regex extraction was used instead
+      "unavailable" - both Gemini and regex failed (skills will be empty)
     """
     ai_status: str
 
@@ -78,7 +78,7 @@ async def _extract_skills_with_status(text: str) -> tuple[dict, str]:
     - If an unexpected exception occurs → "unavailable" with empty skills.
     """
     try:
-        # Regex is deterministic — run it first as our baseline
+        # Regex is deterministic - run it first as our baseline
         regex_result = extract_skills_with_regex(text)
         # Gemini call: handles its own fallback internally, never raises
         gemini_result = await extract_skills_with_gemini(text)
@@ -113,7 +113,7 @@ class ExtractSkillsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# POST /resume/parse — PDF → plain text (utility, no DB write)
+# POST /resume/parse - PDF → plain text (utility, no DB write)
 # ---------------------------------------------------------------------------
 
 @router.post("/parse", response_model=ParsedResumeResponse)
@@ -162,7 +162,7 @@ async def parse_resume(
 
 
 # ---------------------------------------------------------------------------
-# POST /resume/extract-skills — text → categorised skills (utility, no DB write)
+# POST /resume/extract-skills - text → categorised skills (utility, no DB write)
 # ---------------------------------------------------------------------------
 
 @router.post("/extract-skills", response_model=ExtractSkillsResponse)
@@ -175,7 +175,7 @@ async def extract_resume_skills(
 
 
 # ---------------------------------------------------------------------------
-# POST /resume/upload — full pipeline: parse → validate → extract → embed → save
+# POST /resume/upload - full pipeline: parse → validate → extract → embed → save
 # ---------------------------------------------------------------------------
 
 @router.post("/upload", response_model=ResumeUploadWithAiStatus, status_code=status.HTTP_200_OK)
@@ -195,7 +195,7 @@ async def upload_resume(
       3. Validate that the text is long enough to be a real resume.
       4. Extract categorised skills via Gemini (falls back to regex silently).
       5. Create or update the resume record in the database.
-      6. Attempt Pinecone embedding — if Pinecone fails, set embedding_id=None
+      6. Attempt Pinecone embedding - if Pinecone fails, set embedding_id=None
          and continue. Never return 503 for external AI/vector store failures.
 
     Only returns 503 if PostgreSQL is unreachable (handled by FastAPI/SQLAlchemy).
@@ -260,7 +260,7 @@ async def upload_resume(
     word_count = pdf_service.get_word_count(resume_text)
 
     # ------------------------------------------------------------------
-    # 3. Extract skills — Gemini with regex fallback, tracks which was used
+    # 3. Extract skills - Gemini with regex fallback, tracks which was used
     # ------------------------------------------------------------------
     parsed_skills, ai_status = await _extract_skills_with_status(resume_text)
 
@@ -289,7 +289,7 @@ async def upload_resume(
     await db.flush()  # assigns resume_record.id without committing
 
     # ------------------------------------------------------------------
-    # 5. Upsert Pinecone embedding — failure is non-fatal
+    # 5. Upsert Pinecone embedding - failure is non-fatal
     #    A resume without an embedding still works for display and skill
     #    gap analysis; only semantic similarity search is degraded.
     # ------------------------------------------------------------------
@@ -302,7 +302,7 @@ async def upload_resume(
         )
     except (VectorServiceError, RuntimeError, Exception) as exc:
         logger.warning(
-            "Pinecone upsert failed for user %s (resume %s) — "
+            "Pinecone upsert failed for user %s (resume %s) - "
             "proceeding without embedding: %s",
             current_user.id,
             resume_record.id,
@@ -331,7 +331,7 @@ async def upload_resume(
 
 
 # ---------------------------------------------------------------------------
-# GET /resume/me — fetch current user's resume
+# GET /resume/me - fetch current user's resume
 # ---------------------------------------------------------------------------
 
 @router.get("/me", response_model=ResumeResponse)
@@ -344,7 +344,7 @@ async def get_resume(
 
     Route is /resume/me (not /resume/) to match the REST convention used
     by the frontend and avoid ambiguity with collection routes.
-    user_id is int — queried directly with ==.
+    user_id is int - queried directly with ==.
     """
     result = await db.execute(
         select(Resume).where(Resume.user_id == current_user.id)
@@ -372,7 +372,7 @@ async def get_resume(
 
 
 # ---------------------------------------------------------------------------
-# GET /resume/skills — skills dict + flat list only
+# GET /resume/skills - skills dict + flat list only
 # ---------------------------------------------------------------------------
 
 @router.get("/skills", response_model=SkillsResponse)
@@ -402,7 +402,7 @@ async def get_resume_skills(
 
 
 # ---------------------------------------------------------------------------
-# DELETE /resume/me — remove resume record + Pinecone vector
+# DELETE /resume/me - remove resume record + Pinecone vector
 # ---------------------------------------------------------------------------
 
 @router.delete("/me", response_model=ResumeDeleteResponse)
@@ -413,7 +413,7 @@ async def delete_resume(
     """
     Delete the user's resume from the database and Pinecone.
 
-    Pinecone deletion failure is non-fatal — DB record is still removed.
+    Pinecone deletion failure is non-fatal - DB record is still removed.
     """
     result = await db.execute(
         select(Resume).where(Resume.user_id == current_user.id)
@@ -432,7 +432,7 @@ async def delete_resume(
         success = vector_service.delete_resume_embedding(resume.embedding_id)
         if not success:
             logger.warning(
-                "Could not delete Pinecone vector '%s' for user %s — "
+                "Could not delete Pinecone vector '%s' for user %s - "
                 "proceeding with DB delete anyway.",
                 resume.embedding_id,
                 current_user.id,

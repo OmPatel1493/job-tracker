@@ -3,7 +3,7 @@ Resume DB model.
 
 WHY one resume per user (unique user_id):
   A user's profile has one active resume at a time. The upload endpoint
-  upserts — it updates the existing record rather than creating duplicates.
+  upserts - it updates the existing record rather than creating duplicates.
   If the user uploads a new file, the old text, skills, and embedding are
   overwritten in place.
 

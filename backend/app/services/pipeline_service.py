@@ -1,5 +1,5 @@
 """
-Pipeline service — master orchestrator for the AI matching pipeline.
+Pipeline service - master orchestrator for the AI matching pipeline.
 
 WHY a dedicated pipeline_service.py:
   The AI pipeline involves multiple stages across 4 different services. Putting
@@ -10,7 +10,7 @@ WHY run AFTER the application is saved:
   The application row must exist in the DB before we can update it with AI
   results. The router creates the row first, then fires the pipeline. This
   also means a pipeline failure never blocks the user from saving their
-  application — the row always exists, AI fields just stay null until
+  application - the row always exists, AI fields just stay null until
   the pipeline completes.
 
 WHY per-stage try/except:
@@ -102,7 +102,7 @@ async def _run_pipeline(
     """
     run_label = "re-run" if is_rerun else "run"
     logger.info(
-        "Pipeline %s started — application_id=%s user_id=%s",
+        "Pipeline %s started - application_id=%s user_id=%s",
         run_label, application_id, user_id,
     )
 
@@ -131,7 +131,7 @@ async def _run_pipeline(
 
         if resume is None:
             logger.warning(
-                "Pipeline: no resume for user %s — writing note to application.",
+                "Pipeline: no resume for user %s - writing note to application.",
                 user_id,
             )
             application.notes = (
@@ -203,5 +203,5 @@ async def _run_pipeline(
         await db.rollback()
         return {"success": False, "error": str(exc), "failed_stage": "db_write"}
 
-    logger.info("Pipeline %s complete — application_id=%s", run_label, application_id)
+    logger.info("Pipeline %s complete - application_id=%s", run_label, application_id)
     return {"success": True, "result": matching_result}

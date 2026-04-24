@@ -1,5 +1,5 @@
 """
-Pinecone vector service — stores and queries resume embeddings.
+Pinecone vector service - stores and queries resume embeddings.
 
 WHY vector embeddings:
   Raw text cannot be compared by similarity directly. Embeddings convert text
@@ -10,7 +10,7 @@ WHY vector embeddings:
 WHY Gemini for embeddings (not OpenAI):
   Google's text-embedding-004 model is available on the free API tier.
   It produces 768-dimensional vectors with strong semantic accuracy.
-  Same GEMINI_API_KEY used by the skill extractor — no extra credentials.
+  Same GEMINI_API_KEY used by the skill extractor - no extra credentials.
 
 WHY task_type matters for Gemini embeddings:
   Gemini optimises embeddings differently depending on use case.
@@ -18,7 +18,7 @@ WHY task_type matters for Gemini embeddings:
   "retrieval_query" is used when querying (job description lookup).
   Using the correct task_type improves match quality significantly.
 
-IMPORTANT — Pinecone index setup (one-time manual step):
+IMPORTANT - Pinecone index setup (one-time manual step):
   Before using this service, create a Pinecone index with these settings:
     name      : value of PINECONE_INDEX_NAME in your .env
     dimension : 768   ← Gemini text-embedding-004 output size (NOT 1536)
@@ -90,7 +90,7 @@ def _startup_connection_check() -> None:
 
     WHY at module load: surfaces misconfiguration (missing keys, wrong
     index name) immediately when the server starts rather than on the
-    first user request. Non-fatal — the server starts regardless.
+    first user request. Non-fatal - the server starts regardless.
     """
     if not settings.PINECONE_API_KEY or not settings.PINECONE_INDEX_NAME:
         logger.warning(
@@ -231,7 +231,7 @@ def query_similar_to_jd(jd_text: str, user_id: str, top_k: int = 1) -> float:
     Args:
         jd_text: The plain text of the job description.
         user_id: Filter queries to this user's resumes only.
-        top_k:   Number of results to retrieve (default 1 — best match).
+        top_k:   Number of results to retrieve (default 1 - best match).
 
     Returns:
         Cosine similarity score (0.0 to 1.0) of the top match.
@@ -282,7 +282,7 @@ def delete_resume_embedding(vector_id: str) -> bool:
         True if the delete succeeded, False if it failed for any reason.
 
     WHY return bool (not raise):
-        Deletion failures are non-critical — the worst outcome is a stale
+        Deletion failures are non-critical - the worst outcome is a stale
         vector in Pinecone. Returning False lets callers log the failure
         without crashing the request that triggered it.
     """

@@ -1,12 +1,12 @@
 """
 Pydantic schemas for resume endpoints.
 
-SkillsDict          — typed shape of extracted skills (used inside responses)
-ResumeTextUpload    — request body for plain-text upload
-ResumeUploadResponse — returned by POST /resume/upload
-ResumeResponse      — returned by GET  /resume/
-SkillsResponse      — returned by GET  /resume/skills
-ResumeDeleteResponse — returned by DELETE /resume/
+SkillsDict          - typed shape of extracted skills (used inside responses)
+ResumeTextUpload    - request body for plain-text upload
+ResumeUploadResponse - returned by POST /resume/upload
+ResumeResponse      - returned by GET  /resume/
+SkillsResponse      - returned by GET  /resume/skills
+ResumeDeleteResponse - returned by DELETE /resume/
 """
 
 from datetime import datetime
@@ -25,7 +25,7 @@ class SkillsDict(BaseModel):
 
     WHY typed instead of plain dict:
       A plain dict gives no IDE autocompletion and allows any shape.
-      Typing each category makes the contract explicit — callers know exactly
+      Typing each category makes the contract explicit - callers know exactly
       which keys exist and that values are always lists of strings.
     """
 
@@ -71,7 +71,7 @@ class ResumeUploadResponse(BaseModel):
 
 
 class ResumeResponse(BaseModel):
-    """Returned by GET /resume/ — full resume details for the current user."""
+    """Returned by GET /resume/ - full resume details for the current user."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -84,7 +84,7 @@ class ResumeResponse(BaseModel):
 
 
 class SkillsResponse(BaseModel):
-    """Returned by GET /resume/skills — skills only, no raw text."""
+    """Returned by GET /resume/skills - skills only, no raw text."""
 
     skills: SkillsDict
     flat_skills: list[str]

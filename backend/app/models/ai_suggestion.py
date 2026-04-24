@@ -2,7 +2,7 @@
 AiSuggestion DB model.
 
 Stores the AI-generated resume suggestions for a job application.
-One record per application — re-generating overwrites the existing row.
+One record per application - re-generating overwrites the existing row.
 
 WHY store suggestions as a JSON string (Text column):
     The suggestions list is a list of dicts with a fixed shape. Storing

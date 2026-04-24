@@ -27,7 +27,7 @@ class ApplicationNotesUpdate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Response models — shared
+# Response models - shared
 # ---------------------------------------------------------------------------
 
 class MatchResult(BaseModel):
@@ -46,7 +46,7 @@ class MatchResult(BaseModel):
 
 
 class ApplicationResponse(BaseModel):
-    """Light response — used for list views."""
+    """Light response - used for list views."""
     id: int
     user_id: int
     company_name: str
@@ -63,7 +63,7 @@ class ApplicationResponse(BaseModel):
 
 
 class ApplicationDetailResponse(ApplicationResponse):
-    """Full response — used for detail/single-item views."""
+    """Full response - used for detail/single-item views."""
     job_description: str
     jd_skills: Optional[dict] = None
     matched_skills: Optional[list[str]] = None
@@ -77,7 +77,7 @@ class ApplicationDetailResponse(ApplicationResponse):
 
 
 # ---------------------------------------------------------------------------
-# Response models — Day 20
+# Response models - Day 20
 # ---------------------------------------------------------------------------
 
 class ApplicationListResponse(BaseModel):

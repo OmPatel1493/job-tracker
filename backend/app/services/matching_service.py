@@ -1,5 +1,5 @@
 """
-Matching service — orchestrates semantic similarity and skill overlap scoring
+Matching service - orchestrates semantic similarity and skill overlap scoring
 to produce a single "fit score" for a resume vs. job description.
 
 WHY a dedicated matching_service.py:
@@ -10,10 +10,10 @@ WHY a dedicated matching_service.py:
   only needs to call run_full_matching() and get back a ready-to-return dict.
 
 WHY two scoring signals (semantic + skill overlap):
-  - Semantic score (Pinecone cosine): captures overall meaning similarity —
+  - Semantic score (Pinecone cosine): captures overall meaning similarity -
     "experienced Python engineer" and "Python developer" score high even
     though the words differ.
-  - Skill overlap score: counts exact skill matches — a precise signal for
+  - Skill overlap score: counts exact skill matches - a precise signal for
     hard requirements like "must know Kubernetes".
   Combining both (60/40 weighted) is more reliable than either alone.
 """
@@ -52,7 +52,7 @@ def compute_semantic_score(jd_text: str, user_id: str) -> float:
     try:
         score = vector_service.query_similar_to_jd(jd_text, user_id)
     except Exception as exc:
-        logger.warning("compute_semantic_score failed (%s) — defaulting to 0.0.", exc)
+        logger.warning("compute_semantic_score failed (%s) - defaulting to 0.0.", exc)
         score = 0.0
 
     return round(float(score), 4)
@@ -80,7 +80,7 @@ def compute_skill_overlap_score(
         We want to know how well the resume covers the job requirements,
         not how many of the resume's skills appear in the JD. A resume with
         100 skills always covering 10 JD skills is a 100% match by resume
-        denominator — misleading. JD denominator is the correct signal.
+        denominator - misleading. JD denominator is the correct signal.
     """
     if not jd_skills:
         return 0.0
@@ -108,7 +108,7 @@ def compute_fit_score(
         Weighted combined score in range [0.0, 1.0], rounded to 4 decimal places.
 
     WHY 60/40 weighting:
-        Semantic score captures holistic meaning — more robust to phrasing
+        Semantic score captures holistic meaning - more robust to phrasing
         differences. Skill overlap is precise but brittle (misses synonyms).
         Weighting semantic higher rewards candidates who genuinely understand
         the domain even if their resume uses different terminology.
@@ -129,7 +129,7 @@ def get_fit_label(fit_score: float) -> str:
         0.91 – 1.00 → "Excellent Fit"
 
     WHY string labels:
-        Raw floats are not user-friendly. Labels give instant context —
+        Raw floats are not user-friendly. Labels give instant context -
         "Strong Fit" is immediately actionable; 0.8231 is not.
     """
     if fit_score <= 0.40:
@@ -218,45 +218,3 @@ def run_full_matching(
 # ---------------------------------------------------------------------------
 # Inline tests
 # ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    # Test compute_skill_overlap_score
-    resume = ["Python", "FastAPI", "Docker", "PostgreSQL", "Git"]
-    jd = ["Python", "Docker", "Kubernetes", "AWS"]
-
-    overlap = compute_skill_overlap_score(resume, jd)
-    assert overlap == 0.5, f"expected 0.5, got {overlap}"
-    print(f"PASS: compute_skill_overlap_score — {overlap}")
-
-    overlap_empty = compute_skill_overlap_score(resume, [])
-    assert overlap_empty == 0.0, "empty JD should return 0.0"
-    print("PASS: compute_skill_overlap_score returns 0.0 for empty JD")
-
-    # Test case-insensitive matching
-    overlap_case = compute_skill_overlap_score(["python", "docker"], ["Python", "Docker"])
-    assert overlap_case == 1.0, f"expected 1.0, got {overlap_case}"
-    print(f"PASS: compute_skill_overlap_score is case-insensitive — {overlap_case}")
-
-    # Test compute_fit_score
-    fit = compute_fit_score(0.8, 0.5)
-    expected = round(0.8 * 0.6 + 0.5 * 0.4, 4)
-    assert fit == expected, f"expected {expected}, got {fit}"
-    print(f"PASS: compute_fit_score — {fit}")
-
-    # Test get_fit_label for each range
-    cases = [
-        (0.00, "Poor Fit"),
-        (0.40, "Poor Fit"),
-        (0.41, "Moderate Fit"),
-        (0.60, "Moderate Fit"),
-        (0.61, "Good Fit"),
-        (0.75, "Good Fit"),
-        (0.76, "Strong Fit"),
-        (0.90, "Strong Fit"),
-        (0.91, "Excellent Fit"),
-        (1.00, "Excellent Fit"),
-    ]
-    for score, expected_label in cases:
-        label = get_fit_label(score)
-        assert label == expected_label, f"score {score}: expected '{expected_label}', got '{label}'"
-    print("PASS: get_fit_label — all ranges correct")

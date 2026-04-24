@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # CORS - comma-separated list of allowed origins
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001"
+
     # AI (optional until Week 4)
     GEMINI_API_KEY: str = ""
     OPENAI_API_KEY: str = ""
