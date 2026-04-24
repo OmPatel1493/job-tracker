@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { Menu } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const PAGE_TITLES: Record<string, string> = {
@@ -26,13 +27,26 @@ function getTitle(pathname: string): string {
   return "JobTracker AI";
 }
 
-export default function TopBar() {
+interface TopBarProps {
+  onMenuClick: () => void;
+}
+
+export default function TopBar({ onMenuClick }: TopBarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-slate-800 bg-slate-950 px-6">
-      <h1 className="text-sm font-semibold text-white">{getTitle(pathname)}</h1>
+    <header className="flex h-14 items-center border-b border-slate-800 bg-slate-950 px-4 sm:px-6">
+      <button
+        onClick={onMenuClick}
+        className="lg:hidden mr-3 text-slate-400 hover:text-white transition-colors"
+        aria-label="Open sidebar"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      <h1 className="flex-1 text-center text-sm font-semibold text-white lg:text-left">
+        {getTitle(pathname)}
+      </h1>
       {user && (
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
           {getInitials(user.full_name || user.email)}

@@ -288,32 +288,34 @@ export default function DashboardPage() {
             </p>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart
-              data={skillGaps}
-              layout="vertical"
-              margin={{ top: 0, right: 16, bottom: 0, left: 0 }}
-            >
-              <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" horizontal={false} />
-              <XAxis
-                type="number"
-                tick={{ fill: "#94a3b8", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                allowDecimals={false}
-              />
-              <YAxis
-                type="category"
-                dataKey="skill"
-                width={120}
-                tick={{ fill: "#94a3b8", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip content={<DarkTooltip />} />
-              <Bar dataKey="count" name="Missing in" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="h-[250px] lg:h-[350px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={skillGaps}
+                layout="vertical"
+                margin={{ top: 0, right: 16, bottom: 0, left: 0 }}
+              >
+                <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="skill"
+                  width={120}
+                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip content={<DarkTooltip />} />
+                <Bar dataKey="count" name="Missing in" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
 

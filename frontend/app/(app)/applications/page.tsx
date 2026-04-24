@@ -253,7 +253,7 @@ export default function ApplicationsPage() {
         </div>
         <div className="flex items-center gap-2">
           {/* View toggle */}
-          <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800 p-1">
+          <div className="hidden lg:flex items-center rounded-lg border border-slate-700 bg-slate-800 p-1">
             <button
               onClick={() => handleViewChange("list")}
               title="List view"
