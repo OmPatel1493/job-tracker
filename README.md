@@ -13,8 +13,6 @@
 
 ## 🎥 Demo
 
-> [Add a GIF or screenshot here]
-
 **Try it with the demo account:**
 
 ```
