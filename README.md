@@ -1,4 +1,4 @@
-# 🧠 JobTracker AI
+# JobTracker AI
 
 > AI-powered job application tracker with resume matching, skill gap analysis, and intelligent suggestions.
 
@@ -11,7 +11,7 @@
 
 ---
 
-## 🎥 Demo
+## Demo
 
 **Try it with the demo account:**
 
@@ -22,7 +22,7 @@ Password: Demo1234!
 
 ---
 
-## ✨ Features
+## Features
 
 **Resume analysis and skill extraction.** Upload a PDF resume or paste plain text and the system extracts every skill — languages, frameworks, tools, and concepts — using Google Gemini. Skills are stored against your profile and used as the baseline for every fit score calculation across your applications.
 
@@ -36,27 +36,13 @@ Password: Demo1234!
 
 ---
 
-## 🏗️ Architecture
-
-```
-┌─────────────┐     ┌─────────────┐     ┌──────────────┐
-│  Next.js 15 │────▶│   FastAPI   │────▶│    MySQL     │
-│  Frontend   │     │   Backend   │     │   Database   │
-└─────────────┘     └──────┬──────┘     └──────────────┘
-                           │
-                 ┌─────────┴──────────┐
-                 │                    │
-          ┌──────▼──────┐    ┌───────▼──────┐
-          │ Gemini 2.0  │    │   Pinecone   │
-          │  Flash AI   │    │Vector Search │
-          └─────────────┘    └──────────────┘
-```
+## Architecture
 
 The Next.js frontend talks exclusively to the FastAPI backend over a REST API. The backend owns all business logic, persists relational data in MySQL via SQLAlchemy async, offloads AI inference to Google Gemini, and stores/queries resume + job description embeddings in Pinecone.
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
@@ -72,7 +58,7 @@ The Next.js frontend talks exclusively to the FastAPI backend over a REST API. T
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -170,7 +156,7 @@ The demo account credentials are: `demo@jobtracker.ai` / `Demo1234!`
 
 ---
 
-## 📡 API Endpoints
+## API Endpoints
 
 ### Auth
 
@@ -261,7 +247,7 @@ job-tracker/
 
 ---
 
-## 🧮 How the Fit Score Works
+## How the Fit Score Works
 
 Each application is scored on a 0–100 scale using two signals:
 
@@ -288,12 +274,9 @@ fit_score_pct = round(fit_score × 100)
 
 ---
 
-## 👨‍💻 Author
+## Author
 
-Built by Om Patel as a portfolio project.
+Built by Om Patel as a project.
 
 ---
 
-## 📄 License
-
-MIT
